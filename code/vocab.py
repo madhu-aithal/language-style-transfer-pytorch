@@ -8,8 +8,8 @@ class Vocabulary(object):
     def __init__(self, vocab_file, emb_file='', dim_emb=0):
         with open(vocab_file, 'rb') as f:
             self.size, self.word2id, self.id2word = pickle.load(f)
-            print("inside Vocabulary")
-            print(self.size, self.id2word)
+            # print("inside Vocabulary")
+            # print(self.size, self.id2word)
         self.dim_emb = dim_emb
         self.embedding = np.random.random_sample(
             (self.size, self.dim_emb)) - 0.5
@@ -38,5 +38,8 @@ def build_vocab(data, path, min_occur=5):
             word2id[word] = len(word2id)
             id2word.append(word)
     vocab_size = len(word2id)
+    print("vocab_size", vocab_size)
+    print("word2id", len(word2id))
+    print("id2word", len(id2word))
     with open(path, 'wb') as f:
         pickle.dump((vocab_size, word2id, id2word), f, pickle.HIGHEST_PROTOCOL)
