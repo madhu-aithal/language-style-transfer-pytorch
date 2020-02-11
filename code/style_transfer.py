@@ -3,7 +3,7 @@ from vocab import Vocabulary, build_vocab
 from file_io import load_sent, write_sent
 from options import load_arguments
 
-
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import optim
@@ -49,118 +49,131 @@ class Generator(nn.Module):
     def initHidden(self):
         return torch.zeros(1, 1, self.hidden_size, device=device)
 
-class Autoencoder(nn.Module):
+class Model(nn.Module):
     def __init__(self, input_size_enc, hidden_size_enc, 
-    hidden_size_dec, output_size_dec, dropout_p):
+    hidden_size_gen, output_size_gen, dropout_p):
+
         self.input_size_enc = input_size_enc
         self.hidden_size_enc = hidden_size_enc
-        self.hidden_size_dec = hidden_size_dec
-        self.output_size_dec = output_size_dec
+        self.hidden_size_gen = hidden_size_gen
+        self.output_size_gen = output_size_gen
         self.dropout_p = dropout_p
-        self.generator1 = Generator(self.hidden_size_dec, self.output_size_dec, self.dropout_p)
-        self.generator2 = Generator(self.hidden_size_dec, self.output_size_dec, self.dropout_p)
+        self.generator1 = Generator(self.hidden_size_gen, self.output_size_gen, self.dropout_p)
+        self.generator2 = Generator(self.hidden_size_gen, self.output_size_gen, self.dropout_p)
         self.encoder = Encoder(self.input_size_enc, self.hidden_size_enc, self.dropout_p)
+        self.softmax = torch.nn.softmax(self.output_size_gen)
+        self.EOS_token = 2
+        self.k = 5
 
-    def forward(self, input):
-        encoder_hidden = self.encoder.initHidden()
-        generator1_hidden = self.generator1.initHidden()
-        generator2_hidden = self.generator2.initHidden()
+    # def forward(self, input):
+    #     encoder_hidden = self.encoder.initHidden()
+    #     generator1_hidden = self.generator1.initHidden()
+    #     generator2_hidden = self.generator2.initHidden()
 
-        # self.encoder(input, encoder_hidden)
+        
+            # self.encoder(input, encoder_hidden)
 
+    def train(self, input_tensor, target, enc_optim, gen1_optim, gen2_optim, criterion, gamma):
+        # , max_length=MAX_LENGTH)
 
+        enc = self.encoder
+        gen1 = self.generator1
+        gen2 = self.generator2
 
-def train(input_tensor, target, enc, gen1, gen2, enc_optim, gen1_optim, gen2_optim, criterion):
-    # , max_length=MAX_LENGTH)
-    encoder_hidden = encoder.initHidden()
+        encoder_hidden = enc.initHidden()
 
-    enc_optim.zero_grad()
-    gen1_optim.zero_grad()
+        enc_optim.zero_grad()
+        gen1_optim.zero_grad()
 
-    input_length = input_tensor.size(0)
-    # target_length = target_tensor.size(0)
+        input_length = input_tensor.size(0)
 
-    # encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
-    encoder_outputs = torch.zeros(enc.hidden_size, device=device)
+        encoder_outputs = torch.zeros(input_length, enc.hidden_size, device=device)
+        gen1_hid_states = []
+        gen2_hid_states = []
 
-    loss = 0
+        # loss = 0
 
-    for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(
-            input_tensor[ei], encoder_hidden)
-        encoder_outputs[ei] = encoder_output[0, 0]
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = enc(
+                input_tensor[ei], encoder_hidden)
+            encoder_outputs[ei] = encoder_output        
 
-    # gen1_input = torch.tensor(torch.cat([1,encoder_outputs[-1]]), device=device)
+        gen1_input = torch.tensor(torch.cat([target,encoder_outputs[-1]]), device=device)
+        gen2_input = torch.tensor(torch.cat([(target+1)%2,encoder_outputs[-1]]), device=device)
 
-    gen1_hidden = torch.cat([1,encoder_outputs[-1]])
+        # gen1_input = 
 
-    use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+        gen1_hidden = torch.cat([target,encoder_outputs])
+        gen2_hidden = torch.cat([(target+1)%2,encoder_outputs])
 
-    if use_teacher_forcing:
-        # Teacher forcing: Feed the target as the next input
-        for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
-            loss += criterion(decoder_output, target_tensor[di])
-            decoder_input = target_tensor[di]  # Teacher forcing
+        gen1_output = torch.zeros(self.output_size_gen)
+        gen2_output = torch.zeros(self.output_size_gen)
 
-    else:
-        # Without teacher forcing: use its own predictions as the next input
-        for di in range(target_length):
-            decoder_output, decoder_hidden, decoder_attention = decoder(
-                decoder_input, decoder_hidden, encoder_outputs)
-            topv, topi = decoder_output.topk(1)
-            decoder_input = topi.squeeze().detach()  # detach from history as input
+        for i in range(input_length):
+            gen1_output, gen1_hidden = gen1(
+                gen1_input, gen1_hidden, encoder_outputs[-1])
+            gen1_hid_states.append(gen1_hidden)
+            gen1_input = input_tensor[i]  # Teacher forcing
 
-            loss += criterion(decoder_output, target_tensor[di])
-            if decoder_input.item() == EOS_token:
-                break
+        while np.argmax(gen2_output) != self.EOS_token:
+            gen2_output, gen2_hidden = gen2(
+                gen2_input, gen2_hidden, encoder_outputs)
+            gen2_hid_states.append(gen2_hidden)
+            topv, topi = gen2_output.topk(1)
+            gen2_input = topi.squeeze().detach()  # detach from history as 
+            gen2_input = self.softmax(gen2_input/gamma)
 
-    loss.backward()
+            # loss += criterion(ge, target_tensor[di])
+            # if decoder_input.item() == EOS_token:
+            #     break
 
-    encoder_optimizer.step()
-    decoder_optimizer.step()
+        # loss.backward()
 
-    return loss.item() / target_length
+        # encoder_optimizer.step()
+        # decoder_optimizer.step()
 
-def trainIters(encoder, generator1, generator2, print_every=1000, plot_every=100, learning_rate=0.01):
-    start = time.time()
-    plot_losses = []
-    print_loss_total = 0  # Reset every print_every
-    plot_loss_total = 0  # Reset every plot_every
+        # return loss.item() / target_length
+        return encoder_outputs[-1], gen1_hid_states, gen2_hid_states
 
-    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+    def trainIters(self, training_data, print_every=1000, plot_every=100, learning_rate=0.01):
+        # start = time.time()
+        # plot_losses = []
+        # print_loss_total = 0  # Reset every print_every
+        # plot_loss_total = 0  # Reset every plot_every
 
-    criterion = nn.NLLLoss()
-    indices = np.arange(training_pair.shape[0])
+        enc_optim = optim.SGD(self.encoder.parameters(), lr=learning_rate)
+        gen1_optim = optim.SGD(self.generator1.parameters(), lr=learning_rate)
+        gen2_optim = optim.SGD(self.generator2.parameters(), lr=learning_rate)
 
-    for i in range(indices):
-        input_tensor = training_data[i]        
-        # target_tensor = training_pair[1]
+        criterion = nn.NLLLoss()
+        indices = np.arange(training_data.shape[0])
 
-        loss = train(input_tensor, encoder,
-                     generator1, generator2, enc_optim, gen1_optim, gen2_optim, criterion)
-        # print_loss_total += loss
-        # plot_loss_total += loss
+        for i in range(indices):
+            input_tensor = training_data[i]        
+            # target_tensor = training_pair[1]
 
-        # if iter % print_every == 0:
-        #     print_loss_avg = print_loss_total / print_every
-        #     print_loss_total = 0
-        #     print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-        #                                  iter, iter / n_iters * 100, print_loss_avg))
+            loss = train(input_tensor, enc_optim, gen1_optim, gen2_optim, criterion)
+            # print_loss_total += loss
+            # plot_loss_total += loss
 
-        # if iter % plot_every == 0:
-        #     plot_loss_avg = plot_loss_total / plot_every
-        #     plot_losses.append(plot_loss_avg)
-        #     plot_loss_total = 0
+            # if iter % print_every == 0:
+            #     print_loss_avg = print_loss_total / print_every
+            #     print_loss_total = 0
+            #     print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
+            #                                  iter, iter / n_iters * 100, print_loss_avg))
 
-    # showPlot(plot_losses)
+            # if iter % plot_every == 0:
+            #     plot_loss_avg = plot_loss_total / plot_every
+            #     plot_losses.append(plot_loss_avg)
+            #     plot_loss_total = 0
+
+        # showPlot(plot_losses)
 
 def get_model(args, vocab):
-    dim_hidden = args.dim_y+args.dim_z
-    encoder_generator = Autoencoder(vocab.dim_emb, dim_hidden, 
+    dim_hidden = args.dim_y+args.dim_z    
+    model = Model(vocab.dim_emb, dim_hidden, 
     dim_hidden, vocab.size, args.dropout_keep_prob)
+    model.trainIters()
 
 
 if __name__ == '__main__':
