@@ -7,6 +7,7 @@ import sys
 import time
 import math
 import random
+from datetime import datetime
 import _pickle as pickle
 from utils import *
 
@@ -22,7 +23,9 @@ from generator import Generator
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def initLogging(no_of_epochs):
-    logging.basicConfig(filename='app'+str(no_of_epochs)+'.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
+    filename = str(datetime.now().strftime('app'+str(no_of_epochs)+'_%H_%M_%d_%m_%Y.log'))
+
+    logging.basicConfig(filename=filename, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
     logger=logging.getLogger() 
     logger.setLevel(logging.DEBUG)
     return logger 
@@ -144,7 +147,7 @@ def get_model(args, vocab):
 if __name__ == '__main__':
     args = load_arguments()
 
-    no_of_epochs = 100
+    no_of_epochs = args.max_epochs
 
     logger = initLogging(no_of_epochs)
 
