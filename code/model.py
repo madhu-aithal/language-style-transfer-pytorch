@@ -51,57 +51,66 @@ class Model():
         
         enc_optim.zero_grad()
 
-        encoder_hidden = self.encoder.initHidden(device=self.device)
-        # print(input_data)
+        input_data = torch.t(input_data)
         input_length = input_data.shape[0]
+        batch_size = input_data.shape[1]
 
+        encoder_hidden = self.encoder.initHidden(device=self.device)
+        encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
 
         input_tensor = self.encoder.embedding(input_data)
+
         if torch.cuda.is_available():
             input_tensor = input_tensor.to(device=self.device)
 
-        encoder_outputs = torch.zeros(input_length, self.encoder.hidden_size, device=self.device)
+        encoder_outputs = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
 
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(
-                input_tensor[ei].view(1,-1), encoder_hidden)
-            encoder_outputs[ei] = input_tensor[ei] 
+                input_tensor[ei,:,:], encoder_hidden)
+            encoder_outputs[ei] = encoder_hidden 
 
         return encoder_outputs[-1]
 
     # Generate X using [y,z] where y is style attribute and z is the latent content obtained from the encoder
     def generate_x(self, hidden_vec, gen, true_outputs, criterion, teacher_forcing=False):
         gen_hid_states = []
-        gen_input = torch.tensor([[self.GO_token]], device=self.device)
+        batch_size = hidden_vec.shape[1]
+        gen_input = torch.tensor([self.GO_token], device=self.device)
+        gen_input = gen_input.repeat(batch_size)
         gen_hidden = hidden_vec
 
         gen_output = torch.zeros(self.output_size_gen, device=self.device)
-        input_length = len(true_outputs)
+        input_length = true_outputs.shape[1]
         loss = 0
 
         for i in range(input_length):
-            gen_input = self.encoder.embedding(gen_input)
+            gen_input = gen_input.unsqueeze(0)
+            gen_input = gen_input.unsqueeze(2)
+            gen_input = self.encoder.embedding(gen_input).squeeze(2)
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
-            loss += criterion(gen_output, true_outputs[i].view(1))
+            # print(true_outputs[:,i])
+            loss += criterion(gen_output, true_outputs[:,i])
 
             gen_hid_states.append(gen_hidden)
 
             if teacher_forcing == True:
                 gen_input = true_outputs[i]
             else:
-                topv, topi = gen_output.topk(1)
-                gen_input = topi.squeeze().detach()
+                gen_input = torch.argmax(gen_output, dim=1)
+                # topv, topi = gen_output.topk(1)
+                # gen_input = topi.squeeze().detach()
 
-            if torch.argmax(gen_output) == self.EOS_token:
-                # print("EOS token generated early - generator1")
-                # self.logger.info("EOS token generated early - generator1")
-                break
+            # if torch.argmax(gen_output) == self.EOS_token:
+            #     # print("EOS token generated early - generator1")
+            #     # self.logger.info("EOS token generated early - generator1")
+            #     break
         
         return gen_hid_states, loss
 
 
-    def train_one_sample(self, input_data, target, enc_optim, gen1_optim, criterion):
+    def train_one_sample(self, input_data, sentiment, enc_optim, gen1_optim, criterion):
 
         if torch.cuda.is_available():
             input_data = input_data.to(device=self.device)
@@ -194,21 +203,25 @@ class Model():
         enc_optim.zero_grad()
         gen1_optim.zero_grad()
         # gen2_optim.zero_grad()
-        losses = torch.zeros((training_data.shape[0],1))
+        # losses = torch.zeros((training_data.shape[0],1))
 
         criterion = nn.NLLLoss()
-        # indices = np.arange(training_data.shape[0])
-        
-        for i in np.arange(training_data.shape[0]):
-            input_data = training_data[i]        
-            # target_tensor = training_pair[1]
-            latent_z = self.get_latent_reps(input_data, enc_optim)
-            latent_z = latent_z.view(1,1,-1)
-            hidden_states, loss = self.generate_x(latent_z, self.generator1, input_data, criterion)
-            # latent_z, gen1_hid_states, loss = self.train_one_sample(input_data, 1, enc_optim, gen1_optim, criterion)
-            losses[i] = loss
-
-        avg_loss = torch.mean(losses)
+        indices = np.arange(training_data.shape[0])
+        latent_z = self.get_latent_reps(training_data, enc_optim)
+        # latent_z = torch.unsqueeze(latent_z, 0)
+        hidden_states, loss = self.generate_x(latent_z, self.generator1, training_data, criterion)
+        # for i in np.arange(training_data.shape[0]):
+        #     input_data = training_data[i]        
+        #     # target_tensor = training_pair[1]
+        #     input_data = torch.unsqueeze(input_data, 0)
+        #     latent_z = self.get_latent_reps(input_data, enc_optim)
+        #     latent_z = torch.unsqueeze(latent_z, 0)
+        #     hidden_states, loss = self.generate_x(latent_z, self.generator1, torch.t(input_data), criterion)
+        #     # latent_z, gen1_hid_states, loss = self.train_one_sample(input_data, 1, enc_optim, gen1_optim, criterion)
+        #     losses[i] = loss
+        avg_loss = 0
+        # avg_loss = torch.mean(losses)
+        avg_loss = torch.mean(loss)
         avg_loss.backward()
 
         enc_optim.step()

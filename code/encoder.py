@@ -13,8 +13,9 @@ class Encoder(nn.Module):
         self.embedding = nn.Embedding(input_size, hidden_size)
         self.gru = nn.GRU(hidden_size, hidden_size, dropout=self.dropout_p)
 
-    def forward(self, input, hidden):              
-        input = input.view(1,1,-1)
+    def forward(self, input, hidden):     
+        input = torch.unsqueeze(input, 0)         
+        # input = input.view(1,input.shape[0], input.shape[1])
         output, hidden = self.gru(input, hidden)
         return output, hidden
 

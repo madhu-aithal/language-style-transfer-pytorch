@@ -16,7 +16,8 @@ class Generator(nn.Module):
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, hidden):
-        input = input.view(1,1,-1)
+        # input = input.view(1,1,-1)
+        # input = torch.unsqueeze(input, 0)
         output, hidden = self.gru(input, hidden)
         output = self.softmax(self.out(output[0]))
         return output, hidden
