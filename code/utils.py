@@ -84,12 +84,20 @@ def get_batches(x0, x1, word2id, batch_size, noisy=False):
     z = sorted(zip(order1, x1), key=lambda i: len(i[1]))
     order1, x1 = zip(*z)
 
-    batches = []
+    batches0 = []
+    batches1 = []
     s = 0
     while s < n:
         t = min(s + batch_size, n)
-        batches.append(get_batch(x0[s:t] + x1[s:t],
-            [0]*(t-s) + [1]*(t-s), word2id, noisy))
+        batches0.append(get_batch(x0[s:t],
+            [0]*(t-s), word2id, noisy))
+        s = t
+    
+    s = 0
+    while s < n:
+        t = min(s + batch_size, n)
+        batches1.append(get_batch(x1[s:t],
+            [1]*(t-s), word2id, noisy))
         s = t
 
-    return batches, order0, order1
+    return batches0, batches1, order0, order1

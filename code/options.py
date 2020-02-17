@@ -23,6 +23,9 @@ def load_arguments():
     argparser.add_argument('--vocab',
             type=str,
             default='')
+    argparser.add_argument('--log_dir',
+            type=str,
+            default='logs')
     argparser.add_argument('--embedding',
             type=str,
             default='')

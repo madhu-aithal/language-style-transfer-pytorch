@@ -19,7 +19,6 @@ def load_sent(path, max_size=-1):
     return data
 
 def load_vec(path):
-    x = []
     with open(path) as f:
         for line in f:
             p = line.split()
