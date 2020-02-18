@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+model_saves/
+saves/
 __pycache__/
 tmp/
 .ipynb_checkpoints/
