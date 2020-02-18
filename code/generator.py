@@ -11,7 +11,7 @@ class Generator(nn.Module):
         self.output_size = output_size
         self.dropout_p = dropout_p
 
-        self.gru = nn.GRU(hidden_size, hidden_size, dropout = self.dropout_p)
+        self.gru = nn.GRU(hidden_size-1, hidden_size, dropout = self.dropout_p)
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
 

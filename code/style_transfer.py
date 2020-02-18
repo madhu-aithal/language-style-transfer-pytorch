@@ -21,9 +21,14 @@ from model import Model
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-def initLogging(log_dir, no_of_epochs):
-    filename = str(datetime.now().strftime('app'+str(no_of_epochs)+'_%H_%M_%d_%m_%Y.log'))
-    path = os.path.join(log_dir, filename)
+def get_filename(args):
+    filename = str(datetime.now().strftime('model'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y'))
+    path = os.path.join(args.save_model_path, filename)
+    return path
+
+def init_logging(args):
+    filename = str(datetime.now().strftime('app'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y.log'))
+    path = os.path.join(args.log_dir, filename)
     logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
     logger=logging.getLogger() 
     logger.setLevel(logging.DEBUG)
@@ -46,16 +51,17 @@ def get_model(args, vocab):
     dim_hidden = args.dim_y+args.dim_z    
     print("vocab size: ", vocab.size)
     logger.info("vocab size: "+str(vocab.size))
-    model = Model(vocab.size, dim_hidden, 
-    dim_hidden, vocab.size, args.dropout_keep_prob, device, logger)
+    model = Model(vocab.size+1, dim_hidden, 
+    dim_hidden+1, vocab.size, args.dropout_keep_prob, device, logger)
     return model
 
 if __name__ == '__main__':
     args = load_arguments()
-
+    print(args)
     no_of_epochs = args.max_epochs
+    save_model_path = get_filename(args)
     
-    logger = initLogging(args.log_dir, no_of_epochs)
+    logger = init_logging(args)
 
     #####   data preparation   #####
     if args.train:
@@ -76,4 +82,6 @@ if __name__ == '__main__':
     if args.train:
         model = get_model(args, vocab)
         model.train_max_epochs(args, train0, train1, vocab, no_of_epochs)
+        torch.save(model, save_model_path)
+
         

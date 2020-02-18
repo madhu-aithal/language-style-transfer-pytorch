@@ -15,7 +15,7 @@ class Discriminator(nn.Module):
         self.conv3 = nn.Conv2d(1,100,(5, self.embedding_size))
         in_layer_fc = 100+100+100
         self.fc1 = nn.Linear(in_layer_fc, 10)
-        self.fc2 = nn.Linear(10, 2)
+        self.fc2 = nn.Linear(10, self.output_size)
         self.dropout = nn.Dropout(p = dropout_p)
 
         self.softmax = nn.Softmax(dim=1)

@@ -25,13 +25,16 @@ def load_arguments():
             default='')
     argparser.add_argument('--log_dir',
             type=str,
-            default='logs')
+            default='../logs')
     argparser.add_argument('--embedding',
             type=str,
             default='')
     argparser.add_argument('--model',
             type=str,
             default='')
+    argparser.add_argument('--save_model_path',
+            type=str,
+            default='../saves')
     argparser.add_argument('--load_model',
             type=bool,
             default=False)
