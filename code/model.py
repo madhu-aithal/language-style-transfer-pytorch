@@ -32,7 +32,7 @@ class Model():
         self.dropout_p = dropout_p
         self.device = device
 
-        self.generator1 = Generator(self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
+        self.generator1 = Generator(self.hidden_size_gen-1, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
         # self.generator2 = Generator(self.hidden_size_gen, self.output_size_gen, self.dropout_p)
         self.encoder = Encoder(self.input_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
         self.discriminator1 = Discriminator(self.hidden_size_gen, 1).to(self.device)

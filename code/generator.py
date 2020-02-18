@@ -5,13 +5,14 @@ from torch import optim
 import torch.nn.functional as F
 
 class Generator(nn.Module):
-    def __init__(self, hidden_size, output_size, dropout_p):
+    def __init__(self, input_size, hidden_size, output_size, dropout_p):
         super(Generator, self).__init__()
+        self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.dropout_p = dropout_p
 
-        self.gru = nn.GRU(hidden_size-1, hidden_size, dropout = self.dropout_p)
+        self.gru = nn.GRU(self.input_size, self.hidden_size, dropout = self.dropout_p)
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
 
