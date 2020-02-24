@@ -48,6 +48,7 @@ def get_batch(x, y, word2id, noisy=False, min_len=5):
     eos = word2id['<eos>']
     unk = word2id['<unk>']
 
+    lengths = []
     rev_x, go_x, x_eos, weights = [], [], [], []
     max_len = max([len(sent) for sent in x])
     max_len = max(max_len, min_len)
@@ -56,6 +57,8 @@ def get_batch(x, y, word2id, noisy=False, min_len=5):
         l = len(sent)
         padding = [pad] * (max_len - l)
         _sent_id = noise(sent_id, unk) if noisy else sent_id
+        lengths.append(l-1)
+        # torch.nn.utils.rnn.pack_padded_sequence(batch_in, seq_lengths, batch_first=True)
         rev_x.append(padding + _sent_id[::-1])
         go_x.append([go] + sent_id + padding)
         x_eos.append(sent_id + [eos] + padding)
@@ -67,7 +70,8 @@ def get_batch(x, y, word2id, noisy=False, min_len=5):
             'weights':    weights,
             'labels':     y,
             'size':       len(x),
-            'len':        max_len+1}
+            'len':        max_len+1,
+            'lengths': lengths}
 
 def get_batches(x0, x1, word2id, batch_size, noisy=False):
     if len(x0) < len(x1):

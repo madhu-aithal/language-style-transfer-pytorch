@@ -34,7 +34,7 @@ def load_arguments():
             default='')
     argparser.add_argument('--save_model_path',
             type=str,
-            default='../saves')
+            default='../model_saves')
     argparser.add_argument('--load_model',
             type=bool,
             default=False)

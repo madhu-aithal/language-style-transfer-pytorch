@@ -19,6 +19,9 @@ import torch.nn.functional as F
 
 # from model import Model
 from autoencoder import Model
+# from torch.utils.tensorboard import SummaryWriter
+
+# writer = SummaryWriter('runs/cross-alignment')
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
@@ -82,7 +85,50 @@ if __name__ == '__main__':
 
     if args.train:
         model = get_model(args, vocab)
-        model.train_max_epochs(args, train0, train1, vocab, no_of_epochs)
+        losses_epochs = []
+        
+        for epoch in range(args.max_epochs):
+            random.shuffle(train0)
+            random.shuffle(train1)
+            batches0, batches1, _, _ = get_batches(train0, train1, vocab.word2id,
+            args.batch_size, noisy=True)
+
+            random.shuffle(batches0)
+            random.shuffle(batches1)
+            print("Epoch: ", epoch)
+            logger.info("Epoch: "+str(epoch))
+            avg_loss = 0
+            running_loss = 0
+            i = 1
+
+            for batch0, batch1 in zip(batches0, batches1):
+
+                batch0_input = batch0["enc_inputs"]
+                batch0_input = torch.tensor(batch0_input, device=device)
+                
+                batch1_input = batch1["enc_inputs"]                
+                batch1_input = torch.tensor(batch1_input, device=device)
+                
+                loss0 = model.train_one_batch(batch0_input, batch0["lengths"], learning_rate=args.learning_rate)
+                loss1 = model.train_one_batch(batch1_input, batch1["lengths"], learning_rate=args.learning_rate)
+                
+                avg_loss += (loss0+loss1)/2
+                running_loss += avg_loss
+                
+                if i%5 == 0:
+                    torch.save(model, save_model_path)
+
+                i+=1
+            print("Avg Loss: ", avg_loss)
+            print("---------\n")
+            logger.info("Avg Loss: " + str(avg_loss))
+            logger.info("---------\n")
+
+
+        # writer.add_graph(model)
+        # writer.close()
+        # model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, save_model_path)
+
         torch.save(model, save_model_path)
 
         

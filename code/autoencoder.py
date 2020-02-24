@@ -21,6 +21,7 @@ from encoder import Encoder
 from generator import Generator
 from discriminator import Discriminator
 
+
 class Model():
     def __init__(self, input_size_enc, hidden_size_enc, 
     hidden_size_gen, output_size_gen, dropout_p, device, logger):
@@ -75,7 +76,7 @@ class Model():
         return encoder_outputs[-1]
 
     # Generate X using [y,z] where y is style attribute and z is the latent content obtained from the encoder
-    def generate_x(self, hidden_vec, gen, true_outputs, criterion, teacher_forcing=False):
+    def generate_x(self, hidden_vec, gen, true_outputs, criterion, paddings, teacher_forcing=False):
         gen_hid_states = []
         batch_size = hidden_vec.shape[1]
         gen_input = torch.tensor([self.GO_token], device=self.device)
@@ -85,15 +86,16 @@ class Model():
         gen_output = torch.zeros(self.output_size_gen, device=self.device)
         input_length = true_outputs.shape[1]
         loss = 0
-
+        losses = torch.zeros(input_length, batch_size)
+        # pred_matrix = 
         for i in range(input_length):
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
-            loss += criterion(gen_output, true_outputs[:,i])
-
+            loss = criterion(gen_output, true_outputs[:,i])
+            losses[i] = loss
             gen_hid_states.append(gen_hidden)
 
             if teacher_forcing == True:
@@ -107,93 +109,18 @@ class Model():
             #     # print("EOS token generated early - generator1")
             #     # self.logger.info("EOS token generated early - generator1")
             #     break
-        
-        return gen_hid_states, loss
+        # loss = criterion(, ignore_index=mask)
 
 
-    def train_one_sample(self, input_data, sentiment, enc_optim, gen1_optim, criterion):
+        padding_tensor = torch.zeros(input_length, batch_size)
+        for idx, val in enumerate(paddings):
+            padding_tensor[0:val+1, idx] = 1
 
-        if torch.cuda.is_available():
-            input_data = input_data.to(device=self.device)
+        avg_loss = torch.mean(torch.mul(padding_tensor, losses))
+        # loss = loss/input_length
+        return gen_hid_states, avg_loss 
 
-        enc = self.encoder
-        gen1 = self.generator1
-        gen2 = self.generator2
-
-        encoder_hidden = enc.initHidden(self.device)
-
-        enc_optim.zero_grad()
-        gen1_optim.zero_grad()
-
-        input_length = input_data.size(0)
-
-        input_tensor = enc.embedding(input_data)
-        if torch.cuda.is_available():
-            input_tensor = input_tensor.to(device=self.device)
-
-        encoder_outputs = torch.zeros(input_length, enc.hidden_size, device=self.device)
-        
-
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = enc(
-                input_tensor[ei].view(1,-1), encoder_hidden)
-            encoder_outputs[ei] = input_tensor[ei]        
-
-        # gen1_hid_states = []
-        # gen2_hid_states = []
-
-        # gen1_input = torch.tensor([[self.GO_token]], device=self.device)
-        # gen2_input = torch.tensor([[self.GO_token]], device=self.device)
-        
-        # gen1_hidden = encoder_hidden
-        
-
-        # gen1_output = torch.zeros(self.output_size_gen, device=self.device)
-
-        # loss = 0
-
-
-        # for i in range(input_length):
-        #     gen1_input = enc.embedding(gen1_input)
-        #     gen1_output, gen1_hidden = gen1(
-        #         gen1_input, gen1_hidden)
-
-        #     loss += criterion(gen1_output, input_data[i].view(1))
-
-        #     gen1_hid_states.append(gen1_hidden)
-        #     topv, topi = gen1_output.topk(1)
-        #     gen1_input = topi.squeeze().detach()
-
-        #     if torch.argmax(gen1_output) == self.EOS_token:
-        #         print("EOS token generated early - generator1")
-        #         self.logger.info("EOS token generated early - generator1")
-        #         break
-
-
-        # for j in range(input_length):
-        #     gen2_input = enc.embedding(gen2_input)
-        #     gen1_output, gen1_hidden = gen1(
-        #         gen1_input, gen1_hidden)
-
-        #     loss += criterion(gen1_output, input_data[i].view(1))
-
-        #     gen1_hid_states.append(gen1_hidden)
-        #     topv, topi = gen1_output.topk(1)
-        #     gen1_input = topi.squeeze().detach()
-
-        #     if torch.argmax(gen1_output) == self.EOS_token:
-        #         print("EOS token generated early")
-        #         self.logger.info("EOS token generated early")
-        #         break
-
-
-        loss.backward()
-
-        enc_optim.step()
-        gen1_optim.step()
-        return encoder_outputs[-1], gen1_hid_states, loss.item() / input_length
-
-    def train_one_batch(self, training_data, learning_rate=0.01):
+    def train_one_batch(self, training_data, paddings, learning_rate=0.01):
         # batch_loss_total = 0  
 
         enc_optim = optim.SGD(self.encoder.parameters(), lr=learning_rate)
@@ -210,13 +137,13 @@ class Model():
         
         # losses = torch.zeros((training_data.shape[0],1))
 
-        criterion = nn.NLLLoss()
+        criterion = nn.NLLLoss(reduce=False)
         indices = np.arange(training_data.shape[0])
         latent_z = self.get_latent_reps(training_data, enc_optim)
         # latent_z = torch.unsqueeze(latent_z, 0)
         # hidden_states_original, loss_original = self.generate_x(latent_z, self.generator1, training_data, criterion, teacher_forcing=True)
         # hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator2, training_data, criterion, teacher_forcing=False)
-        hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator1, training_data, criterion, teacher_forcing=False)
+        hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator1, training_data, criterion, paddings, teacher_forcing=False)
 
 
 
@@ -239,11 +166,17 @@ class Model():
 
         return avg_loss
 
-    def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs):
+    def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs, save_model_path):
         # print("train max epochs")
         losses_epochs = []
+        # enc_optim = optim.SGD(self.encoder.parameters(), lr=learning_rate)
+        # gen1_optim = optim.SGD(self.generator1.parameters(), lr=learning_rate)
+        # gen2_optim = optim.SGD(self.generator2.parameters(), lr=learning_rate)
+        # discrim1_optim = optim.SGD(self.discriminator1.parameters(), lr=learning_rate)
+        # discrim2_optim = optim.SGD(self.discriminator2.parameters(), lr=learning_rate)
+
         
-        for iter in range(no_of_epochs):
+        for epoch in range(no_of_epochs):
             random.shuffle(train0)
             random.shuffle(train1)
             batches0, batches1, _, _ = get_batches(train0, train1, vocab.word2id,
@@ -253,23 +186,56 @@ class Model():
             #     batches1 = torch.tensor(batches1).to(self.device)
             random.shuffle(batches0)
             random.shuffle(batches1)
-            print("Epoch: ", iter)
-            self.logger.info("Epoch: "+str(iter))
+            print("Epoch: ", epoch)
+            self.logger.info("Epoch: "+str(epoch))
             avg_loss = 0
+            running_loss = 0
+            i = 1
+
             for batch0, batch1 in zip(batches0, batches1):
+                # enc_optim.zero_grad()
+                # gen1_optim.zero_grad()
+                # gen2_optim.zero_grad()
+                # discrim1_optim.zero_grad()
+                # discrim2_optim.zero_grad()
+
                 batch0_input = batch0["enc_inputs"]
                 batch0_input = torch.tensor(batch0_input, device=self.device)
+                # batch0_input = torch.nn.utils.rnn.pack_padded_sequence(batch0_input, batch0["lengths"])
                 # batch0_input = torch.cat((batch0_input, torch.zeros([batch0_input.shape[0],1],dtype=torch.long, device=self.device)), 1)
 
                 batch1_input = batch1["enc_inputs"]                
                 batch1_input = torch.tensor(batch1_input, device=self.device)
+                # batch1_input = torch.nn.utils.rnn.pack_padded_sequence(batch1_input, batch0["lengths"])
                 # batch1_input = torch.cat((batch1_input, torch.ones([batch1_input.shape[0],1],dtype=torch.long,device=self.device)), 1)
                 
-                loss0 = self.train_one_batch(batch0_input, learning_rate=args.learning_rate)
-                loss1 = self.train_one_batch(batch1_input, learning_rate=args.learning_rate)
+                loss0 = self.train_one_batch(batch0_input, batch0["lengths"], learning_rate=args.learning_rate)
+                loss1 = self.train_one_batch(batch1_input, batch1["lengths"], learning_rate=args.learning_rate)
                 
                 avg_loss += (loss0+loss1)/2
+                running_loss += avg_loss
+                # avg_loss.backward()
+                
+                # enc_optim.step()
+                # gen1_optim.step()
 
+                # if i % 20 == 19: 
+                #     # ...log the running loss
+                #     writer.add_scalar('training loss',
+                #                     running_loss / 1000,
+                #                     epoch * (len(batch0)+len(batch1)) + i)
+
+                #     # ...log a Matplotlib Figure showing the model's predictions on a
+                #     # random mini-batch
+                #     # writer.add_figure('predictions vs. actuals',
+                #     #                 plot_classes_preds(net, inputs, labels),
+                #     #                 global_step=epoch * len(trainloader) + i)
+                #     running_loss = 0.0
+                
+                if i%5 == 0:
+                    torch.save(model, save_model_path)
+
+                i+=1
             print("Avg Loss: ", avg_loss)
             print("---------\n")
             self.logger.info("Avg Loss: " + str(avg_loss))
