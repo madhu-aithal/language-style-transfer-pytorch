@@ -1,5 +1,7 @@
 import numpy as np
 import random
+from datetime import datetime
+import os
 
 def strip_eos(sents):
     return [sent[:sent.index('<eos>')] if '<eos>' in sent else sent
@@ -105,3 +107,8 @@ def get_batches(x0, x1, word2id, batch_size, noisy=False):
         s = t
 
     return batches0, batches1, order0, order1
+
+def get_saves_filename(args):
+    filename = str(datetime.now().strftime('model.'+str(100)+'.%H:%M.%m-%d-%Y'))
+    path = os.path.join(args.save_model_path, filename)
+    return path

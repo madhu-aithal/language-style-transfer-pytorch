@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 model_saves/
+runs/
 saves/
 __pycache__/
 tmp/

@@ -8,8 +8,6 @@ import time
 import math
 import random
 from datetime import datetime
-import _pickle as pickle
-from utils import *
 
 import numpy as np
 import torch
@@ -18,13 +16,8 @@ from torch import optim
 import torch.nn.functional as F
 
 from model import Model
+from torch.utils.tensorboard import SummaryWriter
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-
-def get_filename(args):
-    filename = str(datetime.now().strftime('model'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y'))
-    path = os.path.join(args.save_model_path, filename)
-    return path
 
 def init_logging(args):
     filename = str(datetime.now().strftime('app'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y.log'))
@@ -48,6 +41,9 @@ def timeSince(since, percent):
 
 
 def get_model(args, vocab):
+
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+
     dim_hidden = args.dim_y+args.dim_z    
     print("vocab size: ", vocab.size)
     logger.info("vocab size: "+str(vocab.size))
@@ -59,7 +55,6 @@ if __name__ == '__main__':
     args = load_arguments()
     print(args)
     no_of_epochs = args.max_epochs
-    save_model_path = get_filename(args)
     
     logger = init_logging(args)
 
@@ -80,8 +75,8 @@ if __name__ == '__main__':
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
 
     if args.train:
+        writer = SummaryWriter('runs/style_transfer')
         model = get_model(args, vocab)
-        model.train_max_epochs(args, train0, train1, vocab, no_of_epochs)
-        torch.save(model, save_model_path)
+        model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, writer)
 
         

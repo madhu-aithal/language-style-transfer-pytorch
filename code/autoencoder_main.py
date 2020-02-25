@@ -17,11 +17,9 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 
-# from model import Model
 from autoencoder import Model
-# from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
-# writer = SummaryWriter('runs/cross-alignment')
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
@@ -84,6 +82,8 @@ if __name__ == '__main__':
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
 
     if args.train:
+        writer = SummaryWriter('runs/autoencoder')
+
         model = get_model(args, vocab)
         losses_epochs = []
         save_models = False
@@ -122,24 +122,24 @@ if __name__ == '__main__':
                 torch.save(model, save_model_path+"_epoch"+str(epoch))
             print("Avg Loss: ", avg_loss)
             print("---------\n")
-            logger.info("Avg Loss: " + str(avg_loss))
-            logger.info("---------\n")
+            # logger.info("Avg Loss: " + str(avg_loss))
+            # logger.info("---------\n")
 
-        # test_input = ["this place was very good !"]
-        # test_input = [val.split() for val in test_input]
+            writer.add_scalar('Autoencoder loss', avg_loss, epoch)
 
-        # test_input_processed = []
-        # for list_val in test_input:
-        #     temp_list = []
-        #     for val in list_val:
-        #         temp_list.append(model.vocab.word2id[val])
-        #     test_input_processed.append(temp_list)
-        # print(test_input_processed)
-        # print(test_input)
-        # test_input_tensor = torch.tensor(test_input_processed)
-        # print(model.predict(test_input_tensor.t()))
-        # writer.add_graph(model)
-        # writer.close()
+        test_input = ["this place was very good !"]
+        test_input = [val.split() for val in test_input]
+
+        test_input_processed = []
+        for list_val in test_input:
+            temp_list = []
+            for val in list_val:
+                temp_list.append(model.vocab.word2id[val])
+            test_input_processed.append(temp_list)
+        print(test_input_processed)
+        print(test_input)
+        test_input_tensor = torch.tensor(test_input_processed)
+        print(model.predict(test_input_tensor.t()))
         # model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, save_model_path)
         
         torch.save(model, save_model_path)

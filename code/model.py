@@ -21,6 +21,7 @@ from encoder import Encoder
 from generator import Generator
 from discriminator import Discriminator
 
+
 class Model():
     def __init__(self, input_size_enc, hidden_size_enc, 
     hidden_size_gen, output_size_gen, dropout_p, device, logger, lambda_val=1):
@@ -33,7 +34,6 @@ class Model():
         self.device = device
 
         self.generator = Generator(self.hidden_size_gen-1, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
-        # self.generator2 = Generator(self.hidden_size_gen, self.output_size_gen, self.dropout_p)
         self.encoder = Encoder(self.input_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
         self.discriminator1 = Discriminator(self.hidden_size_gen, 1).to(self.device)
         self.discriminator2 = Discriminator(self.hidden_size_gen, 1).to(self.device)
@@ -52,8 +52,6 @@ class Model():
         if torch.cuda.is_available():
             input_data = input_data.to(device=self.device)
         
-        # enc_optim.zero_grad()
-
         input_data = torch.t(input_data)
         input_length = input_data.shape[0]
         batch_size = input_data.shape[1]
@@ -79,7 +77,6 @@ class Model():
         U = torch.rand_like(logits)
         G = -torch.log(-torch.log(U + eps) + eps)
         result = self.softmax((logits + G) / self.gamma)
-        # print(result)
         return result
 
     # Generate X using [y,z] where y is style attribute and z is the latent content obtained from the encoder
@@ -105,7 +102,7 @@ class Model():
             
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
-            # loss += criterion(gen_output, true_outputs[:,i])
+
             loss = criterion(gen_output, true_outputs[:,i])
             losses[i] = loss
             gen_hid_states[i] = gen_hidden
@@ -125,19 +122,7 @@ class Model():
                 gen_input = gen_input.unsqueeze(0)
                 gen_input = torch.matmul(gen_input, self.encoder.embedding.weight)
                 temp_var_not_needed = 1
-                
-                # print(self.encoder.embedding.weight)
-                # gen_input = self.encoder.embedding(gen_input).squeeze(2)
-        # print()
-
-
-                # topv, topi = gen_output.topk(1)
-                # gen_input = topi.squeeze().detach()
-            
-            # if torch.argmax(gen_output) == self.EOS_token:
-            #     # print("EOS token generated early - generator1")
-            #     # self.logger.info("EOS token generated early - generator1")
-            #     break
+               
         padding_tensor = torch.zeros(input_length, batch_size, device=self.device)
         for idx, val in enumerate(paddings):
             padding_tensor[0:val+1, idx] = 1
@@ -148,12 +133,8 @@ class Model():
         return gen_hid_states, avg_loss
 
     def train_one_batch(self, training_data, paddings, learning_rate, sentiment):
-        # batch_loss_total = 0  
-        
-        # losses = torch.zeros((training_data.shape[0],1))
-
+       
         criterion = nn.NLLLoss()
-        indices = np.arange(training_data.shape[0])
         latent_z = self.get_latent_reps(training_data)
         latent_z_original = []
         latent_z_translated = []
@@ -167,30 +148,22 @@ class Model():
                             dtype=torch.float,device=self.device)), 2)
             latent_z_translated = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],1],
                             dtype=torch.float,device=self.device)), 2)
-        # latent_z = torch.unsqueeze(latent_z, 0)
         hidden_states_original, loss_original = self.generate_x(latent_z_original, training_data, criterion, paddings, teacher_forcing=True)
         hidden_states_translated, loss_translated = self.generate_x(latent_z_translated, training_data, criterion, paddings, teacher_forcing=False)
-        # hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator1, training_data, criterion, teacher_forcing=False)
 
-        # avg_loss = 0
-        # avg_loss = torch.mean(losses)
         avg_loss = torch.mean(loss_translated)
-        # avg_loss.backward()
 
-        # enc_optim.step()
-        # gen1_optim.step()
-
-        # return avg_loss
         return hidden_states_original, hidden_states_translated, avg_loss
 
-    def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs):
-        losses_epochs = []
+    def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs, writer, save_epochs_flag=True, 
+    save_epochs=20, save_batch_flag=False, save_batch=5):
         enc_optim = optim.SGD(self.encoder.parameters(), lr=args.learning_rate)
         gen_optim = optim.SGD(self.generator.parameters(), lr=args.learning_rate)
         discrim1_optim = optim.SGD(self.discriminator1.parameters(), lr=args.learning_rate)
         discrim2_optim = optim.SGD(self.discriminator2.parameters(), lr=args.learning_rate)
+        save_model_path = get_saves_filename(args)
 
-        for iter in range(no_of_epochs):
+        for epoch in range(no_of_epochs):
 
             random.shuffle(train0)
             random.shuffle(train1)
@@ -199,16 +172,17 @@ class Model():
 
             random.shuffle(batches0)
             random.shuffle(batches1)
-            print("Epoch: ", iter)
-            self.logger.info("Epoch: "+str(iter))
-            avg_loss = 0
+            print("Epoch: ", epoch)
+            # self.logger.info("Epoch: "+str(epoch))
 
             losses_enc_gen = []
             losses_adv1 = []
             losses_adv2 = []
             rec_losses = []
+            i = 0
 
             for batch0, batch1 in zip(batches0, batches1):
+                i += 1
 
                 enc_optim.zero_grad()
                 gen_optim.zero_grad()
@@ -250,16 +224,36 @@ class Model():
 
                 enc_optim.step()
                 gen_optim.step()
-
                 discrim1_optim.step()
                 discrim2_optim.step()
 
-                break
+                
+
+            if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
+                torch.save(self, save_model_path+".epoch_"+str(epoch+1))
+
             print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses)))
             print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
             print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
             print("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2)))
             print("---------\n")
+
+            # writer.add_scalar('Enc-Gen loss',
+            #                 torch.mean(torch.tensor(losses_enc_gen)),
+            #                 epoch)
+            # writer.add_scalar('Discriminator 1 loss',
+            #                 torch.mean(torch.tensor(losses_adv1)),
+            #                 epoch)
+            # writer.add_scalar('Discriminator 2 loss',
+            #                 torch.mean(torch.tensor(losses_adv2)),
+            #                 epoch)
+
+            writer.add_scalars('Losses', {
+                'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
+                'D1': torch.mean(torch.tensor(losses_adv1)),
+                'D2': torch.mean(torch.tensor(losses_adv2))
+            }, epoch)
+                            
             # self.logger.info("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
             # self.logger.info("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
             # self.logger.info("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2)))
@@ -268,3 +262,5 @@ class Model():
             # self.logger.info("Avg Loss of D1: ", torch.mean(losses_adv1))
             # self.logger.info("Avg Loss of D2: ", torch.mean(losses_adv2))
             # self.logger.info("---------\n")
+        
+        torch.save(self, save_model_path+".epoch_"+str(no_of_epochs))
