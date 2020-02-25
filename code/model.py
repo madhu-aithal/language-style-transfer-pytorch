@@ -38,7 +38,7 @@ class Model():
         self.discriminator1 = Discriminator(self.hidden_size_gen, 1).to(self.device)
         self.discriminator2 = Discriminator(self.hidden_size_gen, 1).to(self.device)
 
-        self.softmax = torch.nn.LogSoftmax(dim=0)
+        self.softmax = torch.nn.Softmax(dim=1)
         self.EOS_token = 2
         self.GO_token = 1
         self.k = 5
@@ -75,6 +75,13 @@ class Model():
 
         return encoder_outputs[-1]
 
+    def gumbel_softmax(self, logits, eps=1e-20):
+        U = torch.rand_like(logits)
+        G = -torch.log(-torch.log(U + eps) + eps)
+        result = self.softmax((logits + G) / self.gamma)
+        # print(result)
+        return result
+
     # Generate X using [y,z] where y is style attribute and z is the latent content obtained from the encoder
     def generate_x(self, hidden_vec, true_outputs, criterion, paddings, teacher_forcing=False):
         gen = self.generator
@@ -108,16 +115,20 @@ class Model():
                 gen_input = gen_input.unsqueeze(0)
                 gen_input = gen_input.unsqueeze(2)
                 gen_input = self.encoder.embedding(gen_input).squeeze(2)
-                # print()
             else:
                 # gen_input = torch.argmax(gen_output, dim=1)
-                gen_input = self.softmax(gen_output/self.gamma)
-                gen_input = gen_input.unsqueeze(0)
+                # gen_input = gen_input.unsqueeze(0)
                 # gen_input = gen_input.unsqueeze(2)
-                # print(self.encoder.embedding.weight)
-                gen_input = torch.matmul(gen_input, self.encoder.embedding.weight)
                 # gen_input = self.encoder.embedding(gen_input).squeeze(2)
-                # print()
+                
+                gen_input = self.gumbel_softmax(gen_output)
+                gen_input = gen_input.unsqueeze(0)
+                gen_input = torch.matmul(gen_input, self.encoder.embedding.weight)
+                temp_var_not_needed = 1
+                
+                # print(self.encoder.embedding.weight)
+                # gen_input = self.encoder.embedding(gen_input).squeeze(2)
+        # print()
 
 
                 # topv, topi = gen_output.topk(1)
@@ -132,7 +143,6 @@ class Model():
             padding_tensor[0:val+1, idx] = 1
 
         avg_loss = 0
-        # if self.training == True:
         avg_loss = torch.mean(torch.mul(padding_tensor, losses))
 
         return gen_hid_states, avg_loss
@@ -243,6 +253,8 @@ class Model():
 
                 discrim1_optim.step()
                 discrim2_optim.step()
+
+                break
             print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses)))
             print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
             print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
