@@ -18,7 +18,7 @@ class Discriminator(nn.Module):
         self.fc2 = nn.Linear(10, self.output_size)
         self.dropout = nn.Dropout(p = dropout_p)
 
-        self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax(dim=0)
 
     def forward(self, input):
         sentence_length = input.shape[2]
@@ -38,7 +38,7 @@ class Discriminator(nn.Module):
         h = self.fc1(h)
         h = F.relu(h)
         h = self.fc2(h)
-        h = F.relu(h)
+        # h = F.relu(h)
         y = self.softmax(h)
 
         return y

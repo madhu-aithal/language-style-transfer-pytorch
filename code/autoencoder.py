@@ -24,7 +24,7 @@ from discriminator import Discriminator
 
 class Model():
     def __init__(self, input_size_enc, hidden_size_enc, 
-    hidden_size_gen, output_size_gen, dropout_p, device, logger):
+    hidden_size_gen, output_size_gen, dropout_p, device, logger, vocab):
 
         self.input_size_enc = input_size_enc
         self.hidden_size_enc = hidden_size_enc
@@ -45,6 +45,7 @@ class Model():
         self.k = 5
         self.gamma = 0.001
         self.logger = logger
+        self.vocab = vocab
         
 
     def get_latent_reps(self, input_data, enc_optim):
@@ -75,6 +76,45 @@ class Model():
 
         return encoder_outputs[-1]
 
+    def predict(self, input_data):
+        if torch.cuda.is_available():
+            input_data = input_data.to(device=self.device)
+
+        input_length = input_data.shape[0]
+        input_tensor = self.encoder.embedding(input_data)
+        batch_size = input_data.shape[1]
+        encoder_hidden = self.encoder.initHidden(device=self.device)
+        encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
+
+        encoder_outputs = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
+
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = self.encoder(
+                input_tensor[ei,:,:], encoder_hidden)
+            encoder_outputs[ei] = encoder_hidden 
+
+        latent_z = encoder_outputs[-1]
+        
+        # latent_z = torch.randn_like(latent_z)
+        gen_input = torch.tensor([self.GO_token], device=self.device)
+        gen_hidden = latent_z
+
+        outputs = [self.vocab.id2word[gen_input[0]]]
+        gen_output = torch.zeros(self.output_size_gen, device=self.device)
+        count = 0
+        while torch.argmax(gen_output) != self.EOS_token:
+            gen_input = gen_input.unsqueeze(0)
+            gen_input = gen_input.unsqueeze(2)
+            gen_input = self.encoder.embedding(gen_input).squeeze(2)
+            gen_output, gen_hidden = self.generator1(
+                gen_input, gen_hidden)
+            gen_input = torch.argmax(gen_output, dim=1)
+            outputs.append(self.vocab.id2word[gen_input])
+            print(self.vocab.id2word[gen_input])
+        
+        return outputs
+        
+
     # Generate X using [y,z] where y is style attribute and z is the latent content obtained from the encoder
     def generate_x(self, hidden_vec, gen, true_outputs, criterion, paddings, teacher_forcing=False):
         gen_hid_states = []
@@ -94,14 +134,19 @@ class Model():
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
+
+            # if self.training == True:
             loss = criterion(gen_output, true_outputs[:,i])
             losses[i] = loss
             gen_hid_states.append(gen_hidden)
 
+            # if self.training == True:
             if teacher_forcing == True:
                 gen_input = true_outputs[i]
             else:
                 gen_input = torch.argmax(gen_output, dim=1)
+            # else:
+            #     gen_input = torch.argmax(gen_output, dim=1)
                 # topv, topi = gen_output.topk(1)
                 # gen_input = topi.squeeze().detach()
 
@@ -116,6 +161,8 @@ class Model():
         for idx, val in enumerate(paddings):
             padding_tensor[0:val+1, idx] = 1
 
+        avg_loss = 0
+        # if self.training == True:
         avg_loss = torch.mean(torch.mul(padding_tensor, losses))
         # loss = loss/input_length
         return gen_hid_states, avg_loss 
@@ -146,16 +193,6 @@ class Model():
         hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator1, training_data, criterion, paddings, teacher_forcing=False)
 
 
-
-        # for i in np.arange(training_data.shape[0]):
-        #     input_data = training_data[i]        
-        #     # target_tensor = training_pair[1]
-        #     input_data = torch.unsqueeze(input_data, 0)
-        #     latent_z = self.get_latent_reps(input_data, enc_optim)
-        #     latent_z = torch.unsqueeze(latent_z, 0)
-        #     hidden_states, loss = self.generate_x(latent_z, self.generator1, torch.t(input_data), criterion)
-        #     # latent_z, gen1_hid_states, loss = self.train_one_sample(input_data, 1, enc_optim, gen1_optim, criterion)
-        #     losses[i] = loss
         avg_loss = 0
         # avg_loss = torch.mean(losses)
         avg_loss = torch.mean(loss_translated)
@@ -167,23 +204,14 @@ class Model():
         return avg_loss
 
     def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs, save_model_path):
-        # print("train max epochs")
         losses_epochs = []
-        # enc_optim = optim.SGD(self.encoder.parameters(), lr=learning_rate)
-        # gen1_optim = optim.SGD(self.generator1.parameters(), lr=learning_rate)
-        # gen2_optim = optim.SGD(self.generator2.parameters(), lr=learning_rate)
-        # discrim1_optim = optim.SGD(self.discriminator1.parameters(), lr=learning_rate)
-        # discrim2_optim = optim.SGD(self.discriminator2.parameters(), lr=learning_rate)
-
         
         for epoch in range(no_of_epochs):
             random.shuffle(train0)
             random.shuffle(train1)
             batches0, batches1, _, _ = get_batches(train0, train1, vocab.word2id,
             args.batch_size, noisy=True)
-            # if torch.cuda.is_available():
-            #     batches0 = torch.tensor(batches0).to(self.device)
-            #     batches1 = torch.tensor(batches1).to(self.device)
+
             random.shuffle(batches0)
             random.shuffle(batches1)
             print("Epoch: ", epoch)
@@ -193,12 +221,7 @@ class Model():
             i = 1
 
             for batch0, batch1 in zip(batches0, batches1):
-                # enc_optim.zero_grad()
-                # gen1_optim.zero_grad()
-                # gen2_optim.zero_grad()
-                # discrim1_optim.zero_grad()
-                # discrim2_optim.zero_grad()
-
+               
                 batch0_input = batch0["enc_inputs"]
                 batch0_input = torch.tensor(batch0_input, device=self.device)
                 # batch0_input = torch.nn.utils.rnn.pack_padded_sequence(batch0_input, batch0["lengths"])

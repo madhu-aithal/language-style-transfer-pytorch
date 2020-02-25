@@ -75,7 +75,7 @@ def load_arguments():
             default=100)
     argparser.add_argument('--learning_rate',
             type=float,
-            default=0.0005)
+            default=0.2)
     #argparser.add_argument('--learning_rate_decay',
     #        type=float,
     #        default=0.5)

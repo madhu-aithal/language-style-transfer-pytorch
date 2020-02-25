@@ -56,7 +56,7 @@ def get_model(args, vocab):
     print("vocab size: ", vocab.size)
     logger.info("vocab size: "+str(vocab.size))
     model = Model(vocab.size, dim_hidden, 
-    dim_hidden, vocab.size, args.dropout_keep_prob, device, logger)
+    dim_hidden, vocab.size, args.dropout_keep_prob, device, logger, vocab)
     return model
 
 if __name__ == '__main__':
@@ -124,11 +124,23 @@ if __name__ == '__main__':
             logger.info("Avg Loss: " + str(avg_loss))
             logger.info("---------\n")
 
+        test_input = ["this place was very good !"]
+        test_input = [val.split() for val in test_input]
 
+        test_input_processed = []
+        for list_val in test_input:
+            temp_list = []
+            for val in list_val:
+                temp_list.append(model.vocab.word2id[val])
+            test_input_processed.append(temp_list)
+        print(test_input_processed)
+        print(test_input)
+        test_input_tensor = torch.tensor(test_input_processed)
+        print(model.predict(test_input_tensor.t()))
         # writer.add_graph(model)
         # writer.close()
         # model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, save_model_path)
-
-        torch.save(model, save_model_path)
+        
+        # torch.save(model, save_model_path)
 
         
