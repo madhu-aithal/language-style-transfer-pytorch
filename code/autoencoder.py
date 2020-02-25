@@ -77,27 +77,28 @@ class Model():
         return encoder_outputs[-1]
 
     def predict(self, input_data):
-        if torch.cuda.is_available():
-            input_data = input_data.to(device=self.device)
+        # if torch.cuda.is_available():
+        #     input_data = input_data.to(device=self.device)
 
-        input_length = input_data.shape[0]
-        input_tensor = self.encoder.embedding(input_data)
-        batch_size = input_data.shape[1]
-        encoder_hidden = self.encoder.initHidden(device=self.device)
-        encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
+        # input_length = input_data.shape[0]
+        # input_tensor = self.encoder.embedding(input_data)
+        # batch_size = input_data.shape[1]
+        # encoder_hidden = self.encoder.initHidden(device=self.device)
+        # encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
 
-        encoder_outputs = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
+        # encoder_outputs = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
 
-        for ei in range(input_length):
-            encoder_output, encoder_hidden = self.encoder(
-                input_tensor[ei,:,:], encoder_hidden)
-            encoder_outputs[ei] = encoder_hidden 
+        # for ei in range(input_length):
+        #     encoder_output, encoder_hidden = self.encoder(
+        #         input_tensor[ei,:,:], encoder_hidden)
+        #     encoder_outputs[ei] = encoder_hidden 
 
-        latent_z = encoder_outputs[-1]
+        # latent_z = encoder_outputs[-1]
         
         # latent_z = torch.randn_like(latent_z)
-        gen_input = torch.tensor([self.GO_token], device=self.device)
-        gen_hidden = latent_z
+        gen_input = torch.tensor([input_data[0][0]], device=self.device)
+        # gen_hidden = latent_z
+        gen_hidden = torch.zeros(1,1,self.hidden_size_gen, device = self.device)
 
         outputs = [self.vocab.id2word[gen_input[0]]]
         gen_output = torch.zeros(self.output_size_gen, device=self.device)

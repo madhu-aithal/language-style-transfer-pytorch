@@ -51,7 +51,7 @@ def get_model(args, vocab):
     dim_hidden = args.dim_y+args.dim_z    
     print("vocab size: ", vocab.size)
     logger.info("vocab size: "+str(vocab.size))
-    model = Model(vocab.size+1, dim_hidden, 
+    model = Model(vocab.size, dim_hidden, 
     dim_hidden+1, vocab.size, args.dropout_keep_prob, device, logger)
     return model
 

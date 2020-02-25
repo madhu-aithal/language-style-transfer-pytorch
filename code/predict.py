@@ -1,6 +1,6 @@
 import torch 
 
-PATH = "model_saves/model30_15_41_24_02_2020"
+PATH = "model_saves/model300_18_45_24_02_2020"
 
 # input = ["What is your name?"]
 

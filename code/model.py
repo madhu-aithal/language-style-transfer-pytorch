@@ -38,7 +38,7 @@ class Model():
         self.discriminator1 = Discriminator(self.hidden_size_gen, 1).to(self.device)
         self.discriminator2 = Discriminator(self.hidden_size_gen, 1).to(self.device)
 
-        self.softmax = torch.nn.LogSoftmax(self.output_size_gen)
+        self.softmax = torch.nn.LogSoftmax(dim=0)
         self.EOS_token = 2
         self.GO_token = 1
         self.k = 5
@@ -89,10 +89,13 @@ class Model():
         loss = 0
         losses = torch.zeros(input_length, batch_size, device=self.device)
         gen_hid_states = torch.zeros(input_length, gen_hidden.shape[0], gen_hidden.shape[1], gen_hidden.shape[2], device=self.device)
+
+        gen_input = gen_input.unsqueeze(0)
+        gen_input = gen_input.unsqueeze(2)
+        gen_input = self.encoder.embedding(gen_input).squeeze(2)
+
         for i in range(input_length):
-            gen_input = gen_input.unsqueeze(0)
-            gen_input = gen_input.unsqueeze(2)
-            gen_input = self.encoder.embedding(gen_input).squeeze(2)
+            
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
             # loss += criterion(gen_output, true_outputs[:,i])
@@ -102,11 +105,24 @@ class Model():
 
             if teacher_forcing == True:
                 gen_input = true_outputs[:,i]
+                gen_input = gen_input.unsqueeze(0)
+                gen_input = gen_input.unsqueeze(2)
+                gen_input = self.encoder.embedding(gen_input).squeeze(2)
+                # print()
             else:
-                gen_input = torch.argmax(gen_output, dim=1)
+                # gen_input = torch.argmax(gen_output, dim=1)
+                gen_input = self.softmax(gen_output/self.gamma)
+                gen_input = gen_input.unsqueeze(0)
+                # gen_input = gen_input.unsqueeze(2)
+                # print(self.encoder.embedding.weight)
+                gen_input = torch.matmul(gen_input, self.encoder.embedding.weight)
+                # gen_input = self.encoder.embedding(gen_input).squeeze(2)
+                # print()
+
+
                 # topv, topi = gen_output.topk(1)
                 # gen_input = topi.squeeze().detach()
-
+            
             # if torch.argmax(gen_output) == self.EOS_token:
             #     # print("EOS token generated early - generator1")
             #     # self.logger.info("EOS token generated early - generator1")

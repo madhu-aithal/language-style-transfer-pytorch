@@ -86,6 +86,7 @@ if __name__ == '__main__':
     if args.train:
         model = get_model(args, vocab)
         losses_epochs = []
+        save_models = False
         
         for epoch in range(args.max_epochs):
             random.shuffle(train0)
@@ -115,32 +116,32 @@ if __name__ == '__main__':
                 avg_loss += (loss0+loss1)/2
                 running_loss += avg_loss
                 
-                if i%5 == 0:
-                    torch.save(model, save_model_path)
-
                 i+=1
+            
+            if save_models == True and epoch%20 == 0:
+                torch.save(model, save_model_path+"_epoch"+str(epoch))
             print("Avg Loss: ", avg_loss)
             print("---------\n")
             logger.info("Avg Loss: " + str(avg_loss))
             logger.info("---------\n")
 
-        test_input = ["this place was very good !"]
-        test_input = [val.split() for val in test_input]
+        # test_input = ["this place was very good !"]
+        # test_input = [val.split() for val in test_input]
 
-        test_input_processed = []
-        for list_val in test_input:
-            temp_list = []
-            for val in list_val:
-                temp_list.append(model.vocab.word2id[val])
-            test_input_processed.append(temp_list)
-        print(test_input_processed)
-        print(test_input)
-        test_input_tensor = torch.tensor(test_input_processed)
-        print(model.predict(test_input_tensor.t()))
+        # test_input_processed = []
+        # for list_val in test_input:
+        #     temp_list = []
+        #     for val in list_val:
+        #         temp_list.append(model.vocab.word2id[val])
+        #     test_input_processed.append(temp_list)
+        # print(test_input_processed)
+        # print(test_input)
+        # test_input_tensor = torch.tensor(test_input_processed)
+        # print(model.predict(test_input_tensor.t()))
         # writer.add_graph(model)
         # writer.close()
         # model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, save_model_path)
         
-        # torch.save(model, save_model_path)
+        torch.save(model, save_model_path)
 
         
