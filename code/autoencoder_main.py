@@ -8,7 +8,7 @@ import time
 import math
 import random
 from datetime import datetime
-import _pickle as pickle
+# import _pickle as pickle
 from utils import *
 
 import numpy as np
@@ -23,10 +23,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-def get_filename(args):
-    filename = str(datetime.now().strftime('model'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y'))
-    path = os.path.join(args.save_model_path, filename)
-    return path
 
 def init_logging(args):
     filename = str(datetime.now().strftime('app'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y.log'))
@@ -52,8 +48,10 @@ def timeSince(since, percent):
 def get_model(args, vocab):
     dim_hidden = args.dim_y+args.dim_z    
     print("vocab size: ", vocab.size)
+    print("embedding size: ", )
     logger.info("vocab size: "+str(vocab.size))
-    model = Model(vocab.size, dim_hidden, 
+    print("Hidden size: ", dim_hidden)
+    model = Model(vocab.size, args.dim_emb, dim_hidden, 
     dim_hidden, vocab.size, args.dropout_keep_prob, device, logger, vocab)
     return model
 
@@ -61,7 +59,7 @@ if __name__ == '__main__':
     args = load_arguments()
     print(args)
     no_of_epochs = args.max_epochs
-    save_model_path = get_filename(args)
+    save_model_path = get_saves_filename(args, "autoencoder")
     
     logger = init_logging(args)
 
@@ -82,7 +80,7 @@ if __name__ == '__main__':
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
 
     if args.train:
-        writer = SummaryWriter('runs/autoencoder')
+        writer = SummaryWriter('runs/autoencoder/epochs_'+str(datetime.now().strftime(str(args.max_epochs)+'.%m-%d-%Y.%H:%M')))
 
         model = get_model(args, vocab)
         losses_epochs = []
@@ -127,19 +125,19 @@ if __name__ == '__main__':
 
             writer.add_scalar('Autoencoder loss', avg_loss, epoch)
 
-        test_input = ["this place was very good !"]
-        test_input = [val.split() for val in test_input]
+        # test_input = ["this place was very good !"]
+        # test_input = [val.split() for val in test_input]
 
-        test_input_processed = []
-        for list_val in test_input:
-            temp_list = []
-            for val in list_val:
-                temp_list.append(model.vocab.word2id[val])
-            test_input_processed.append(temp_list)
-        print(test_input_processed)
-        print(test_input)
-        test_input_tensor = torch.tensor(test_input_processed)
-        print(model.predict(test_input_tensor.t()))
+        # test_input_processed = []
+        # for list_val in test_input:
+        #     temp_list = []
+        #     for val in list_val:
+        #         temp_list.append(model.vocab.word2id[val])
+        #     test_input_processed.append(temp_list)
+        # print(test_input_processed)
+        # print(test_input)
+        # test_input_tensor = torch.tensor(test_input_processed)
+        # print(model.predict(test_input_tensor.t()))
         # model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, save_model_path)
         
         torch.save(model, save_model_path)

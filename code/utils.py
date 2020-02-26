@@ -108,7 +108,7 @@ def get_batches(x0, x1, word2id, batch_size, noisy=False):
 
     return batches0, batches1, order0, order1
 
-def get_saves_filename(args):
-    filename = str(datetime.now().strftime('model.'+str(100)+'.%H:%M.%m-%d-%Y'))
+def get_saves_filename(args, model_name="cross-alignment"):
+    filename = str(datetime.now().strftime('model.'+model_name+"."+str(args.max_epochs)+'.%m-%d-%Y.%H:%M'))
     path = os.path.join(args.save_model_path, filename)
     return path

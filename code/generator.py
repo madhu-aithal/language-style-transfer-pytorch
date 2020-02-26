@@ -12,6 +12,7 @@ class Generator(nn.Module):
         self.output_size = output_size
         self.dropout_p = dropout_p
 
+        self.embedding = nn.Embedding(output_size, hidden_size)
         self.gru = nn.GRU(self.input_size, self.hidden_size, dropout = self.dropout_p)
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
@@ -19,6 +20,8 @@ class Generator(nn.Module):
     def forward(self, input, hidden):
         # input = input.view(1,1,-1)
         # input = torch.unsqueeze(input, 0)
+        # print("input: ", input.size())
+        # print("hidden: ", hidden.size())
         output, hidden = self.gru(input, hidden)
         output = self.softmax(self.out(output[0]))
         return output, hidden

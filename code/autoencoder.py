@@ -22,20 +22,22 @@ from generator import Generator
 from discriminator import Discriminator
 
 
-class Model():
-    def __init__(self, input_size_enc, hidden_size_enc, 
+class Model(nn.Module):
+    def __init__(self, input_size_enc, embedding_size_enc, hidden_size_enc, 
     hidden_size_gen, output_size_gen, dropout_p, device, logger, vocab):
-
+        super(Model, self).__init__()
         self.input_size_enc = input_size_enc
+        self.embedding_size_enc = embedding_size_enc
         self.hidden_size_enc = hidden_size_enc
         self.hidden_size_gen = hidden_size_gen
         self.output_size_gen = output_size_gen
         self.dropout_p = dropout_p
         self.device = device
+        self.dropout = nn.Dropout(0.5)
 
-        self.generator1 = Generator(self.hidden_size_gen, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
-        self.generator2 = Generator(self.hidden_size_gen, self.hidden_size_gen, self.output_size_gen, self.dropout_p)
-        self.encoder = Encoder(self.input_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
+        self.generator1 = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
+        # self.generator2 = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p)
+        self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
         self.discriminator1 = Discriminator(self.hidden_size_gen, 2)
         self.discriminator2 = Discriminator(self.hidden_size_gen, 2)
 
@@ -53,7 +55,7 @@ class Model():
         if torch.cuda.is_available():
             input_data = input_data.to(device=self.device)
         
-        enc_optim.zero_grad()
+        #enc_optim.zero_grad()
 
         input_data = torch.t(input_data)
         input_length = input_data.shape[0]
@@ -63,6 +65,7 @@ class Model():
         encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
 
         input_tensor = self.encoder.embedding(input_data)
+        input_tensor = self.dropout(input_tensor)
 
         if torch.cuda.is_available():
             input_tensor = input_tensor.to(device=self.device)
@@ -134,17 +137,19 @@ class Model():
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
+            gen_input = self.dropout(gen_input)
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
 
             # if self.training == True:
-            loss = criterion(gen_output, true_outputs[:,i])
+            loss = criterion(gen_output, true_outputs[:,i].view(-1))
             losses[i] = loss
             gen_hid_states.append(gen_hidden)
 
             # if self.training == True:
             if teacher_forcing == True:
-                gen_input = true_outputs[i]
+                # print("true output: ", true_outputs.size())
+                gen_input = true_outputs[:,i]
             else:
                 gen_input = torch.argmax(gen_output, dim=1)
             # else:
@@ -165,34 +170,38 @@ class Model():
 
         avg_loss = 0
         # if self.training == True:
-        avg_loss = torch.mean(torch.mul(padding_tensor, losses))
+        temp = torch.sum(torch.mul(padding_tensor, losses), dim=0).unsqueeze(0)
+        temp2 = torch.tensor(paddings).unsqueeze(0)
+        avg_loss = torch.mean(temp/temp2)
         # loss = loss/input_length
         return gen_hid_states, avg_loss 
 
     def train_one_batch(self, training_data, paddings, learning_rate=0.01):
         # batch_loss_total = 0  
-
-        enc_optim = optim.SGD(self.encoder.parameters(), lr=learning_rate)
-        gen1_optim = optim.SGD(self.generator1.parameters(), lr=learning_rate)
-        gen2_optim = optim.SGD(self.generator2.parameters(), lr=learning_rate)
-        discrim1_optim = optim.SGD(self.discriminator1.parameters(), lr=learning_rate)
-        discrim2_optim = optim.SGD(self.discriminator2.parameters(), lr=learning_rate)
+        self.train()
+        # self.val()
+        # with torch.no_grad():
+        enc_optim = optim.AdamW(self.parameters(), lr=learning_rate)
+        # gen1_optim = optim.AdamW(self.generator1.parameters(), lr=learning_rate)
+        # gen2_optim = optim.AdamW(self.generator2.parameters(), lr=learning_rate)
+        # discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=learning_rate)
+        # discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=learning_rate)
 
         enc_optim.zero_grad()
-        gen1_optim.zero_grad()
-        gen2_optim.zero_grad()
-        discrim1_optim.zero_grad()
-        discrim2_optim.zero_grad()
+        # gen1_optim.zero_grad()
+        # gen2_optim.zero_grad()
+        # discrim1_optim.zero_grad()
+        # discrim2_optim.zero_grad()
         
         # losses = torch.zeros((training_data.shape[0],1))
 
-        criterion = nn.NLLLoss(reduce=False)
+        criterion = nn.CrossEntropyLoss(reduce=False)
         indices = np.arange(training_data.shape[0])
         latent_z = self.get_latent_reps(training_data, enc_optim)
         # latent_z = torch.unsqueeze(latent_z, 0)
         # hidden_states_original, loss_original = self.generate_x(latent_z, self.generator1, training_data, criterion, teacher_forcing=True)
         # hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator2, training_data, criterion, teacher_forcing=False)
-        hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator1, training_data, criterion, paddings, teacher_forcing=False)
+        hidden_states_translated, loss_translated = self.generate_x(latent_z, self.generator1, training_data, criterion, paddings, teacher_forcing=True)
 
 
         avg_loss = 0
@@ -201,10 +210,11 @@ class Model():
         avg_loss.backward()
 
         enc_optim.step()
-        gen1_optim.step()
+        #gen1_optim.step()
 
         return avg_loss
 
+# Not using train_max_epochs() anymore. It is defined in autoencoder_main.py
     def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs, save_model_path):
         losses_epochs = []
         

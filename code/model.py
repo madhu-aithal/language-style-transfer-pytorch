@@ -156,7 +156,7 @@ class Model():
         return hidden_states_original, hidden_states_translated, avg_loss
 
     def train_max_epochs(self, args, train0, train1, vocab, no_of_epochs, writer, save_epochs_flag=True, 
-    save_epochs=20, save_batch_flag=False, save_batch=5):
+            save_epochs=20, save_batch_flag=False, save_batch=5):
         enc_optim = optim.SGD(self.encoder.parameters(), lr=args.learning_rate)
         gen_optim = optim.SGD(self.generator.parameters(), lr=args.learning_rate)
         discrim1_optim = optim.SGD(self.discriminator1.parameters(), lr=args.learning_rate)

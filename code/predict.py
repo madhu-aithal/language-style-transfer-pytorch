@@ -1,6 +1,6 @@
 import torch 
 
-PATH = "model_saves/model300_11_46_25_02_2020"
+PATH = "model_saves/model.autoencoder.100.02-25-2020.15:37"
 
 # input = ["What is your name?"]
 
