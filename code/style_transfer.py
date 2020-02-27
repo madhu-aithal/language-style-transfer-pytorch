@@ -8,6 +8,7 @@ import time
 import math
 import random
 from datetime import datetime
+from utils import *
 
 import numpy as np
 import torch
@@ -18,14 +19,6 @@ import torch.nn.functional as F
 from model import Model
 from torch.utils.tensorboard import SummaryWriter
 
-
-def init_logging(args):
-    filename = str(datetime.now().strftime('app'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y.log'))
-    path = os.path.join(args.log_dir, filename)
-    logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
-    logger=logging.getLogger() 
-    logger.setLevel(logging.DEBUG)
-    return logger 
 
 def asMinutes(s):
     m = math.floor(s / 60)
@@ -40,15 +33,15 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 
-def get_model(args, vocab):
+def get_model(args, vocab, logger):
 
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
     dim_hidden = args.dim_y+args.dim_z    
     print("vocab size: ", vocab.size)
     logger.info("vocab size: "+str(vocab.size))
-    model = Model(vocab.size, dim_hidden, 
-    dim_hidden+1, vocab.size, args.dropout_keep_prob, device, logger)
+    model = Model(vocab.size, args.dim_emb, dim_hidden, 
+    dim_hidden+1, vocab.size, args.dropout_keep_prob, device, logger, vocab)
     return model
 
 if __name__ == '__main__':
@@ -75,8 +68,28 @@ if __name__ == '__main__':
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
 
     if args.train:
-        writer = SummaryWriter('runs/style_transfer')
-        model = get_model(args, vocab)
+        summ_filename = 'runs/cross-alignment/'+str(datetime.now().strftime('summary.'+str(args.learning_rate)+"."+str(args.max_epochs)+'.%m-%d-%Y.%H:%M'))
+        writer = SummaryWriter(summ_filename)
+
+        model = get_model(args, vocab, logger)
         model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, writer)
+
+                
+        test_input = ["this place was very good"]
+        test_input = [val.split() for val in test_input]
+
+        test_input_processed = []
+        for list_val in test_input:
+            temp_list = []
+            for val in list_val:
+                temp_list.append(model.vocab.word2id[val])
+            test_input_processed.append(temp_list)
+        print(test_input_processed)
+        print(test_input)
+        with torch.no_grad():
+            model.eval()
+            test_input_tensor = torch.tensor(test_input_processed)
+            output = model.predict_autoencoder(test_input_tensor)
+            print(output)
 
         

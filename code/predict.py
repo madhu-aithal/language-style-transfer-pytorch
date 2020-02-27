@@ -1,6 +1,6 @@
 import torch 
 
-PATH = "model_saves/model.autoencoder.100.02-25-2020.15:37"
+PATH = "../model_saves/model.cross-alignment.0.001.50.02-26-2020.15:58.epoch_50"
 
 # input = ["What is your name?"]
 
@@ -23,5 +23,8 @@ for list_val in test_input:
     test_input_processed.append(temp_list)
 print(test_input_processed)
 print(test_input)
-test_input_tensor = torch.tensor(test_input_processed)
-print(model.predict(test_input_tensor.t()))
+with torch.no_grad():
+    model.eval()
+    test_input_tensor = torch.tensor(test_input_processed)
+    output = model.predict_autoencoder(test_input_tensor.t())
+    print(output)

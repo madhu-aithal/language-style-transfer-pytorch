@@ -1,4 +1,3 @@
-import logging
 import os
 from vocab import Vocabulary, build_vocab
 from file_io import load_sent, write_sent
@@ -23,14 +22,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-
-def init_logging(args):
-    filename = str(datetime.now().strftime('app'+str(args.max_epochs)+'_%H_%M_%d_%m_%Y.log'))
-    path = os.path.join(args.log_dir, filename)
-    logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
-    logger=logging.getLogger() 
-    logger.setLevel(logging.DEBUG)
-    return logger 
 
 def asMinutes(s):
     m = math.floor(s / 60)
@@ -61,7 +52,7 @@ if __name__ == '__main__':
     no_of_epochs = args.max_epochs
     save_model_path = get_saves_filename(args, "autoencoder")
     
-    logger = init_logging(args)
+    logger = init_logging(args, "autoencoder")
 
     #####   data preparation   #####
     if args.train:
@@ -80,7 +71,9 @@ if __name__ == '__main__':
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
 
     if args.train:
-        writer = SummaryWriter('runs/autoencoder/epochs_'+str(datetime.now().strftime(str(args.max_epochs)+'.%m-%d-%Y.%H:%M')))
+        # filename = 'runs/autoencoder/epochs_'+str(datetime.now().strftime(str(args.max_epochs)+'.%m-%d-%Y.%H:%M')) 
+        summ_filename = 'runs/autoencoder/'+str(datetime.now().strftime('summary.'+str(args.learning_rate)+"."+str(args.max_epochs)+'.%m-%d-%Y.%H:%M'))
+        writer = SummaryWriter(summ_filename)
 
         model = get_model(args, vocab)
         losses_epochs = []
@@ -120,8 +113,8 @@ if __name__ == '__main__':
                 torch.save(model, save_model_path+"_epoch"+str(epoch))
             print("Avg Loss: ", avg_loss)
             print("---------\n")
-            # logger.info("Avg Loss: " + str(avg_loss))
-            # logger.info("---------\n")
+            logger.info("Avg Loss: " + str(avg_loss))
+            logger.info("---------\n")
 
             writer.add_scalar('Autoencoder loss', avg_loss, epoch)
 

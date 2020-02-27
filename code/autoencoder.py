@@ -33,7 +33,7 @@ class Model(nn.Module):
         self.output_size_gen = output_size_gen
         self.dropout_p = dropout_p
         self.device = device
-        self.dropout = nn.Dropout(0.5)
+        self.dropout = nn.Dropout(self.dropout_p)
 
         self.generator1 = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
         # self.generator2 = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p)
@@ -83,9 +83,12 @@ class Model(nn.Module):
         if torch.cuda.is_available():
             input_data = input_data.to(device=self.device)
 
-        input_length = input_data.shape[0]
-        input_tensor = self.encoder.embedding(input_data)
+        input_length = input_data.shape[0]        
         batch_size = input_data.shape[1]
+
+        input_tensor = self.encoder.embedding(input_data)
+        input_tensor = self.dropout(input_tensor)
+
         encoder_hidden = self.encoder.initHidden(device=self.device)
         encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
 
@@ -105,13 +108,17 @@ class Model(nn.Module):
         gen_output = torch.zeros(self.output_size_gen, device=self.device)
         count = 0
         while torch.argmax(gen_output) != self.EOS_token:
+
             count += 1
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
+            gen_input = self.dropout(gen_input)
+
             gen_output, gen_hidden = self.generator1(
                 gen_input, gen_hidden)
             gen_input = torch.argmax(gen_output, dim=1)
+
             outputs.append(self.vocab.id2word[gen_input])
             # print(self.vocab.id2word[gen_input])
             if count > input_length:
@@ -136,8 +143,10 @@ class Model(nn.Module):
         for i in range(input_length):
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
+
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
             gen_input = self.dropout(gen_input)
+            
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
 
@@ -148,7 +157,6 @@ class Model(nn.Module):
 
             # if self.training == True:
             if teacher_forcing == True:
-                # print("true output: ", true_outputs.size())
                 gen_input = true_outputs[:,i]
             else:
                 gen_input = torch.argmax(gen_output, dim=1)
@@ -164,15 +172,16 @@ class Model(nn.Module):
         # loss = criterion(, ignore_index=mask)
 
 
-        padding_tensor = torch.zeros(input_length, batch_size)
-        for idx, val in enumerate(paddings):
-            padding_tensor[0:val+1, idx] = 1
+        # padding_tensor = torch.zeros(input_length, batch_size)
+        # for idx, val in enumerate(paddings):
+        #     padding_tensor[0:val+1, idx] = 1
 
         avg_loss = 0
         # if self.training == True:
-        temp = torch.sum(torch.mul(padding_tensor, losses), dim=0).unsqueeze(0)
-        temp2 = torch.tensor(paddings).unsqueeze(0)
-        avg_loss = torch.mean(temp/temp2)
+        # temp = torch.sum(torch.mul(padding_tensor, losses), dim=0).unsqueeze(0)
+        # temp2 = torch.tensor(paddings).unsqueeze(0)
+        # avg_loss = torch.mean(temp/temp2)
+        avg_loss = torch.mean(losses)
         # loss = loss/input_length
         return gen_hid_states, avg_loss 
 
@@ -195,7 +204,7 @@ class Model(nn.Module):
         
         # losses = torch.zeros((training_data.shape[0],1))
 
-        criterion = nn.CrossEntropyLoss(reduce=False)
+        criterion = nn.CrossEntropyLoss(ignore_index=self.vocab.word2id['<pad>'])
         indices = np.arange(training_data.shape[0])
         latent_z = self.get_latent_reps(training_data, enc_optim)
         # latent_z = torch.unsqueeze(latent_z, 0)
