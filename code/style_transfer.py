@@ -46,10 +46,11 @@ def get_model(args, vocab, logger):
 
 if __name__ == '__main__':
     args = load_arguments()
-    print(args)
-    no_of_epochs = args.max_epochs
-    
     logger = init_logging(args)
+    
+    print("args: ", args)
+    logger.info("args: "+str(args))
+    no_of_epochs = args.max_epochs
 
     #####   data preparation   #####
     if args.train:
@@ -86,10 +87,14 @@ if __name__ == '__main__':
             test_input_processed.append(temp_list)
         print(test_input_processed)
         print(test_input)
+        logger.info("Test input: "+str(test_input))
+        logger.info("Test input vector: "+str(test_input_processed))
         with torch.no_grad():
             model.eval()
-            test_input_tensor = torch.tensor(test_input_processed)
-            output = model.predict_autoencoder(test_input_tensor)
+            test_input_tensor = torch.tensor(test_input_processed).t()
+            # output = model.predict_autoencoder(test_input_tensor)
+            output = model.predict(test_input_tensor, 0)
             print(output)
+            logger.info("Reconstrcuted sentence: "+str(output))
 
         
