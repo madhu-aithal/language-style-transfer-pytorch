@@ -37,7 +37,7 @@ class Discriminator(nn.Module):
         h = self.dropout(h)
         h = self.fc1(h)
         h = F.relu(h)
-        h = self.fc2(h)
+        # h = self.fc2(h)
         # h = F.relu(h)
         y = self.softmax(h)
 

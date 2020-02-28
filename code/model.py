@@ -172,12 +172,10 @@ class Model(nn.Module):
         gen_input = gen_input.unsqueeze(2)
         gen_input = self.encoder.embedding(gen_input).squeeze(2)
 
-        for i in range(input_length):
-            
+        for i in range(input_length):            
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)
 
-            # loss = criterion(gen_output, true_outputs[:,i])
             loss = criterion(gen_output, true_outputs[i,:])
             losses[i] = loss
             gen_hid_states[i] = gen_hidden
@@ -187,30 +185,18 @@ class Model(nn.Module):
                 gen_input = gen_input.unsqueeze(0)
                 gen_input = gen_input.unsqueeze(2)
                 gen_input = self.encoder.embedding(gen_input).squeeze(2)
-            else:
-                # gen_input = torch.argmax(gen_output, dim=1)
-                # gen_input = gen_input.unsqueeze(0)
-                # gen_input = gen_input.unsqueeze(2)
-                # gen_input = self.encoder.embedding(gen_input).squeeze(2)
-                
+            else:                
                 gen_input = self.gumbel_softmax(gen_output)
                 gen_input = gen_input.unsqueeze(0)
                 gen_input = torch.matmul(gen_input, self.encoder.embedding.weight)
-                # temp_var_not_needed = 1
-               
-        # padding_tensor = torch.zeros(input_length, batch_size, device=self.device)
-        # for idx, val in enumerate(paddings):
-        #     padding_tensor[0:val+1, idx] = 1
-
+                
         avg_loss = 0
-        # avg_loss = torch.mean(torch.mul(padding_tensor, losses))
         avg_loss = torch.mean(losses)
 
         return gen_hid_states, avg_loss
 
     def train_one_batch(self, training_data, paddings, learning_rate, sentiment):
        
-        # criterion = nn.NLLLoss(reduce = False)
         criterion = nn.CrossEntropyLoss(ignore_index=self.vocab.word2id['<pad>'])
         latent_z = self.get_latent_reps(training_data)
         latent_z_original = []
@@ -293,6 +279,8 @@ class Model(nn.Module):
                 losses_adv2.append(loss_adv2)
 
                 # loss_reconstruction = loss0
+
+                
                 loss_reconstruction = (loss0+loss1)/2
                 rec_losses.append(loss_reconstruction)
 
@@ -304,12 +292,14 @@ class Model(nn.Module):
                 loss_adv1.backward(retain_graph=True)
                 loss_adv2.backward()
 
-                enc_optim.step()
-                gen_optim.step()
+                # print(self.encoder.parameters())
+                # print(self.discriminator1.conv1.weight)
+                # print(self.discriminator2)
+                
+                # enc_optim.step()
+                # gen_optim.step()
                 discrim1_optim.step()
                 discrim2_optim.step()
-
-                
 
             if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
                 torch.save(self, save_model_path+".epoch_"+str(epoch+1))
