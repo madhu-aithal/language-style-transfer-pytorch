@@ -201,7 +201,7 @@ class Model(nn.Module):
         latent_z = self.get_latent_reps(training_data)
         latent_z_original = []
         latent_z_translated = []
-        if sentiment == 1:
+        if sentiment == 0:
             latent_z_original = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],1],
                             dtype=torch.float,device=self.device)), 2)
             latent_z_translated = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],1],
@@ -245,6 +245,7 @@ class Model(nn.Module):
             rec_losses = []
             i = 0
 
+            flag = True
             for batch0, batch1 in zip(batches0, batches1):
                 i += 1
 
@@ -263,14 +264,14 @@ class Model(nn.Module):
                 batch1_input = batch1_input.t()
                 batch1_input = torch.cat((batch1_input, torch.ones([batch1_input.shape[0],1],dtype=torch.long,device=self.device)), dim=1)
                 
-                h1, h1_tilde, loss0 = self.train_one_batch(batch0_input, batch0["lengths"], args.learning_rate, 1)
-                h2, h2_tilde, loss1 = self.train_one_batch(batch1_input, batch1["lengths"], args.learning_rate, 2)
+                h1, h1_tilde, loss0 = self.train_one_batch(batch0_input, batch0["lengths"], args.learning_rate, 0)
+                h2, h2_tilde, loss1 = self.train_one_batch(batch1_input, batch1["lengths"], args.learning_rate, 1)
                 
                 adv1_output = self.discriminator1(h1)
                 adv1_output_tilde = self.discriminator1(h2_tilde)
 
-                adv2_output = self.discriminator1(h2)
-                adv2_output_tilde = self.discriminator1(h1_tilde) 
+                adv2_output = self.discriminator2(h2)
+                adv2_output_tilde = self.discriminator2(h1_tilde) 
 
                 loss_adv1 = -torch.mean(torch.log(adv1_output))-torch.mean(torch.log(1-adv1_output_tilde))                           
                 loss_adv2 = -torch.mean(torch.log(adv2_output))-torch.mean(torch.log(1-adv2_output_tilde))               
@@ -288,18 +289,33 @@ class Model(nn.Module):
                 losses_enc_gen.append(loss_enc_gen)
 
                 # loss_reconstruction.backward()
-                loss_enc_gen.backward(retain_graph=True)
-                loss_adv1.backward(retain_graph=True)
-                loss_adv2.backward()
+                
+                loss_enc_gen.backward()
+                # loss_adv1.backward(retain_graph=True)
+                # loss_adv2.backward()
 
                 # print(self.encoder.parameters())
-                # print(self.discriminator1.conv1.weight)
-                # print(self.discriminator2)
+                # print("D1: ", self.discriminator1.conv1.weight.grad)
+                # print("D2: ", self.discriminator2.conv1.weight.grad)
+
                 
-                # enc_optim.step()
-                # gen_optim.step()
-                discrim1_optim.step()
-                discrim2_optim.step()
+                enc_optim.step()
+                gen_optim.step()
+                # discrim1_optim.step()
+                # discrim2_optim.step()
+
+                # if flag == True:
+                #     loss_enc_gen.backward()
+                #     enc_optim.step()
+                #     gen_optim.step()
+                # else:
+                #     loss_adv1.backward(retain_graph=True)
+                #     loss_adv2.backward()
+                #     discrim1_optim.step()
+                #     discrim2_optim.step()
+
+                # flag = not flag
+                # temp_var_not_needed = 0
 
             if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
                 torch.save(self, save_model_path+".epoch_"+str(epoch+1))
@@ -328,11 +344,11 @@ class Model(nn.Module):
                             torch.mean(torch.tensor(losses_adv2)),
                             epoch)
 
-            # writer.add_scalars('All Losses', {
-            #     'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
-            #     'D1': torch.mean(torch.tensor(losses_adv1)),
-            #     'D2': torch.mean(torch.tensor(losses_adv2))
-            # }, epoch)
+            writer.add_scalars('All_losses', {
+                'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
+                'D1': torch.mean(torch.tensor(losses_adv1)),
+                'D2': torch.mean(torch.tensor(losses_adv2))
+            }, epoch)
                             
             # self.logger.info("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
             # self.logger.info("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
