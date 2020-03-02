@@ -23,7 +23,7 @@ from discriminator import Discriminator
 
 
 class Model(nn.Module):
-    def __init__(self, input_size_enc, embedding_size_enc, hidden_size_enc, 
+    def __init__(self, args, input_size_enc, embedding_size_enc, hidden_size_enc, 
     hidden_size_gen, output_size_gen, dropout_p, device, logger, vocab, lambda_val=1):
         super(Model, self).__init__()
         self.input_size_enc = input_size_enc
@@ -38,8 +38,8 @@ class Model(nn.Module):
 
         self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
         self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
-        self.discriminator1 = Discriminator(self.hidden_size_gen, 1).to(self.device)
-        self.discriminator2 = Discriminator(self.hidden_size_gen, 1).to(self.device)
+        self.discriminator1 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
+        self.discriminator2 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
 
         self.softmax = torch.nn.Softmax(dim=1)
         self.EOS_token = 2
@@ -223,8 +223,8 @@ class Model(nn.Module):
         self.train()
         enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate)
         gen_optim = optim.AdamW(self.generator.parameters(), lr=args.learning_rate)
-        discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.learning_rate)
-        discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate)
+        discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.lr_discriminator)
+        discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.lr_discriminator)
         save_model_path = get_saves_filename(args)
 
         for epoch in range(no_of_epochs):
@@ -280,7 +280,6 @@ class Model(nn.Module):
                 losses_adv2.append(loss_adv2)
 
                 # loss_reconstruction = loss0
-
                 
                 loss_reconstruction = (loss0+loss1)/2
                 rec_losses.append(loss_reconstruction)
@@ -290,9 +289,9 @@ class Model(nn.Module):
 
                 # loss_reconstruction.backward()
                 
-                loss_enc_gen.backward()
-                # loss_adv1.backward(retain_graph=True)
-                # loss_adv2.backward()
+                loss_enc_gen.backward(retain_graph=True)
+                loss_adv1.backward(retain_graph=True)
+                loss_adv2.backward()
 
                 # print(self.encoder.parameters())
                 # print("D1: ", self.discriminator1.conv1.weight.grad)
@@ -301,8 +300,8 @@ class Model(nn.Module):
                 
                 enc_optim.step()
                 gen_optim.step()
-                # discrim1_optim.step()
-                # discrim2_optim.step()
+                discrim1_optim.step()
+                discrim2_optim.step()
 
                 # if flag == True:
                 #     loss_enc_gen.backward()
