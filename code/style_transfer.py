@@ -37,11 +37,11 @@ def get_model(args, vocab, logger):
 
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-    dim_hidden = args.dim_y+args.dim_z    
+    # dim_hidden = args.dim_y+args.dim_z    
     print("vocab size: ", vocab.size)
     logger.info("vocab size: "+str(vocab.size))
-    model = Model(args, vocab.size, args.dim_emb, dim_hidden, 
-    dim_hidden+1, vocab.size, args.dropout_keep_prob, device, logger, vocab)
+    model = Model(args, vocab.size, args.dim_emb, args.dim_z, 
+    args.dim_z+args.dim_y, vocab.size, args.dropout_keep_prob, device, logger, vocab)
     return model
 
 if __name__ == '__main__':

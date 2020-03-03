@@ -35,6 +35,7 @@ class Model(nn.Module):
         self.device = device
         self.vocab = vocab
         self.dropout = nn.Dropout(self.dropout_p)
+        self.args = args
 
         self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
         self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
@@ -48,6 +49,8 @@ class Model(nn.Module):
         self.gamma = 0.001
         self.logger = logger
         self.lambda_val = lambda_val
+        self.beta1, self.beta2 = 0.5, 0.999
+        self.grad_clip = 30.0
         
 
     def get_latent_reps(self, input_data):
@@ -88,10 +91,10 @@ class Model(nn.Module):
 
         # latent_z = hidden_states_original[-1,:,:]
         if target_sentiment == 1:
-            latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],1],
+            latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), dim=2)
         else:
-            latent_z = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],1],
+            latent_z = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), dim=2)
         
         gen_input = torch.tensor([self.GO_token], device=self.device)
@@ -202,14 +205,14 @@ class Model(nn.Module):
         latent_z_original = []
         latent_z_translated = []
         if sentiment == 0:
-            latent_z_original = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],1],
+            latent_z_original = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), 2)
-            latent_z_translated = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],1],
+            latent_z_translated = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), 2)
         else:
-            latent_z_original = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],1],
+            latent_z_original = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), 2)
-            latent_z_translated = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],1],
+            latent_z_translated = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), 2)
         hidden_states_original, loss_original = self.generate_x(latent_z_original, training_data, criterion, paddings, teacher_forcing=True)
         hidden_states_translated, loss_translated = self.generate_x(latent_z_translated, training_data, criterion, paddings, teacher_forcing=False)
@@ -267,54 +270,48 @@ class Model(nn.Module):
                 h1, h1_tilde, loss0 = self.train_one_batch(batch0_input, batch0["lengths"], args.learning_rate, 0)
                 h2, h2_tilde, loss1 = self.train_one_batch(batch1_input, batch1["lengths"], args.learning_rate, 1)
                 
-                adv1_output = self.discriminator1(h1)
-                adv1_output_tilde = self.discriminator1(h2_tilde)
+                adv1_output = self.discriminator1(h1.permute(2,1,0,3))
+                adv1_output_tilde = self.discriminator1(h2_tilde.permute(2,1,0,3))
 
-                adv2_output = self.discriminator2(h2)
-                adv2_output_tilde = self.discriminator2(h1_tilde) 
+                adv2_output = self.discriminator2(h2.permute(2,1,0,3))
+                adv2_output_tilde = self.discriminator2(h1_tilde.permute(2,1,0,3)) 
 
                 loss_adv1 = -torch.mean(torch.log(adv1_output))-torch.mean(torch.log(1-adv1_output_tilde))                           
                 loss_adv2 = -torch.mean(torch.log(adv2_output))-torch.mean(torch.log(1-adv2_output_tilde))               
      
                 losses_adv1.append(loss_adv1)
                 losses_adv2.append(loss_adv2)
-
-                # loss_reconstruction = loss0
                 
                 loss_reconstruction = (loss0+loss1)/2
                 rec_losses.append(loss_reconstruction)
 
                 loss_enc_gen = loss_reconstruction - self.lambda_val*(loss_adv1+loss_adv2)
                 losses_enc_gen.append(loss_enc_gen)
-
-                # loss_reconstruction.backward()
                 
-                loss_enc_gen.backward(retain_graph=True)
-                loss_adv1.backward(retain_graph=True)
-                loss_adv2.backward()
+                # loss_enc_gen.backward(retain_graph=True)
+                # loss_adv1.backward(retain_graph=True)
+                # loss_adv2.backward()
 
-                # print(self.encoder.parameters())
-                # print("D1: ", self.discriminator1.conv1.weight.grad)
-                # print("D2: ", self.discriminator2.conv1.weight.grad)
+                # enc_optim.step()
+                # gen_optim.step()
+                # discrim1_optim.step()
+                # discrim2_optim.step()
 
-                
-                enc_optim.step()
-                gen_optim.step()
-                discrim1_optim.step()
-                discrim2_optim.step()
+                if flag == True:
+                    loss_enc_gen.backward()
+                    torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.grad_clip)
+                    torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.grad_clip)
+                    enc_optim.step()
+                    gen_optim.step()
+                else:
+                    loss_adv1.backward(retain_graph=True)
+                    loss_adv2.backward()
+                    torch.nn.utils.clip_grad_norm_(self.discriminator1.parameters(), self.grad_clip)
+                    torch.nn.utils.clip_grad_norm_(self.discriminator2.parameters(), self.grad_clip)
+                    discrim1_optim.step()
+                    discrim2_optim.step()
 
-                # if flag == True:
-                #     loss_enc_gen.backward()
-                #     enc_optim.step()
-                #     gen_optim.step()
-                # else:
-                #     loss_adv1.backward(retain_graph=True)
-                #     loss_adv2.backward()
-                #     discrim1_optim.step()
-                #     discrim2_optim.step()
-
-                # flag = not flag
-                # temp_var_not_needed = 0
+                flag = not flag
 
             if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
                 torch.save(self, save_model_path+".epoch_"+str(epoch+1))
@@ -324,6 +321,7 @@ class Model(nn.Module):
             print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
             print("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2)))
             print("---------\n")
+
             self.logger.info("Avg Reconstruction Loss: " + str(torch.mean(torch.tensor(rec_losses))))
             self.logger.info("Avg Loss of Encoder-Generator: " + str(torch.mean(torch.tensor(losses_enc_gen))))
             self.logger.info("Avg Loss of D1: " + str(torch.mean(torch.tensor(losses_adv1))))
