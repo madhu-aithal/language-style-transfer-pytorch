@@ -35,10 +35,9 @@ def timeSince(since, percent):
 
 def get_model(args, vocab, logger):
 
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-
-    # dim_hidden = args.dim_y+args.dim_z    
+    device = torch.device("cuda:"+str(args.cuda_device) if torch.cuda.is_available() else "cpu")
     print("vocab size: ", vocab.size)
+
     logger.info("vocab size: "+str(vocab.size))
     model = Model(args, vocab.size, args.dim_emb, args.dim_z, 
     args.dim_z+args.dim_y, vocab.size, args.dropout_keep_prob, device, logger, vocab)
@@ -68,12 +67,16 @@ if __name__ == '__main__':
 
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
 
+    if args.dev:
+        dev0 = load_sent(args.dev + '.0')
+        dev1 = load_sent(args.dev + '.1')
+
     if args.train:
         summ_filename = 'runs/cross-alignment/'+str(datetime.now().strftime('summary.'+str(args.learning_rate)+"."+str(args.max_epochs)+'.%m-%d-%Y.%H:%M'))
         writer = SummaryWriter(summ_filename)
 
         model = get_model(args, vocab, logger)
-        model.train_max_epochs(args, train0, train1, vocab, no_of_epochs, writer)
+        model.train_max_epochs(args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer)
 
                 
         test_input = ["this place was very good"]

@@ -79,6 +79,9 @@ def load_arguments():
     argparser.add_argument('--lr_discriminator',
             type=float,
             default=0.005)
+    argparser.add_argument('--cuda_device',
+            type=int,
+            default=1)
     #argparser.add_argument('--learning_rate_decay',
     #        type=float,
     #        default=0.5)
