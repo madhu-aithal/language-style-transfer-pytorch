@@ -2,3 +2,5 @@ python autoencoder_main.py --max_epochs 300 --learning_rate 0.001 --train /home/
 
 
 python style_transfer.py --learning_rate 0.001 --max_epochs 100 --save_model_path /home/madhu/language-style-transfer-pytorch/model_saves --log_dir /home/madhu/language-style-transfer-pytorch/logs --train /home/madhu/language-style-transfer-pytorch/data/yelp/sentimentshort.train --dev /home/madhu/language-style-transfer-pytorch/data/yelp/sentiment.dev --output /home/madhu/language-style-transfer-pytorch/tmp/sentiment.dev --vocab /home/madhu/language-style-transfer-pytorch/tmp/yelp.vocab --model /home/madhu/language-style-transfer-pytorch/tmp/model
+
+nohup python code/style_transfer.py --learning_rate 0.001 --max_epochs 150 --save_model_path /home/madhu/language-style-transfer-pytorch/model_saves --log_dir /home/madhu/language-style-transfer-pytorch/logs --train /home/madhu/language-style-transfer-pytorch/data/yelp/sentimentmedium.train --output /home/madhu/language-style-transfer-pytorch/tmp/sentiment.dev --vocab /home/madhu/language-style-transfer-pytorch/tmp/yelp.medium.vocab --model /home/madhu/language-style-transfer-pytorch/tmp/model &

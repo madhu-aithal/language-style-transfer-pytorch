@@ -110,13 +110,14 @@ def get_batches(x0, x1, word2id, batch_size, noisy=False):
 
     return batches0, batches1, order0, order1
 
-def get_saves_filename(args, model_name="cross-alignment"):
-    filename = str(datetime.now().strftime('model.'+model_name+"."+str(args.learning_rate)+"."+str(args.max_epochs)+'.%m-%d-%Y.%H:%M'))
-    path = os.path.join(args.save_model_path, filename)
-    return path
+def get_filename(args, util_name=""):
+    filename = str(datetime.now().strftime(str(args.learning_rate)+"_"+str(args.max_epochs)+'_%H:%M_%m-%d-%Y'))
+    if util_name != "":
+        filename = util_name+"_"+filename
+    return filename
 
 def init_logging(args, modelname='cross-alignment'):
-    filename = str(datetime.now().strftime(modelname+'.'+str(args.learning_rate)+'.'+str(args.max_epochs)+'.%H:%M.%d_%m_%Y.log'))
+    filename = str(datetime.now().strftime(get_filename(args)+".log"))
     path = os.path.join(args.log_dir, filename)
     logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
     logger=logging.getLogger() 

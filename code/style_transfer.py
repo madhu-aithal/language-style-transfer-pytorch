@@ -66,20 +66,21 @@ if __name__ == '__main__':
             build_vocab(train0 + train1, args.vocab)
 
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
-
+    dev0 = []
+    dev1 = []
     if args.dev:
         dev0 = load_sent(args.dev + '.0')
         dev1 = load_sent(args.dev + '.1')
 
     if args.train:
-        summ_filename = 'runs/cross-alignment/'+str(datetime.now().strftime('summary.'+str(args.learning_rate)+"."+str(args.max_epochs)+'.%m-%d-%Y.%H:%M'))
+        summ_filename = 'runs/cross-alignment/'+get_filename(args, "summary")
         writer = SummaryWriter(summ_filename)
 
         model = get_model(args, vocab, logger)
         model.train_max_epochs(args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer)
 
                 
-        test_input = ["this place was very good"]
+        test_input = ["the staff is friendly ."]
         test_input = [val.split() for val in test_input]
 
         test_input_processed = []
@@ -96,8 +97,8 @@ if __name__ == '__main__':
             model.eval()
             test_input_tensor = torch.tensor(test_input_processed).t()
             # output = model.predict_autoencoder(test_input_tensor)
-            output = model.predict(test_input_tensor, 0)
+            output = model.predict(test_input_tensor, 1)
             print(output)
-            logger.info("Reconstrcuted sentence: "+str(output))
+            logger.info("Reconstructed sentence: "+str(output))
 
         
