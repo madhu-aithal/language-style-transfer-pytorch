@@ -70,14 +70,15 @@ class Model(nn.Module):
         if torch.cuda.is_available():
             input_tensor = input_tensor.to(device=self.device)
 
-        encoder_outputs = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
+        # encoder_hidden_states = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
 
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(
                 input_tensor[ei,:,:], encoder_hidden)
-            encoder_outputs[ei] = encoder_hidden 
+            # encoder_hidden_states[ei] = encoder_hidden 
 
-        return encoder_outputs[-1]
+        # return encoder_hidden_states[-1]
+        return encoder_hidden
 
     def gumbel_softmax(self, logits, eps=1e-20):
         U = torch.rand_like(logits)
@@ -86,7 +87,7 @@ class Model(nn.Module):
         return result
 
     def predict(self, input_data, target_sentiment):
-        input_length = input_data.size()[0]
+        # input_length = input_data.size()[0]
         latent_z = self.get_latent_reps(input_data)
 
         # latent_z = hidden_states_original[-1,:,:]
@@ -102,10 +103,10 @@ class Model(nn.Module):
 
         outputs = []
         gen_output = torch.zeros(self.output_size_gen, device=self.device)
-        count = 0
+        # count = 0
         while torch.argmax(gen_output) != self.EOS_token:
 
-            count += 1
+            # count += 1
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
@@ -116,7 +117,6 @@ class Model(nn.Module):
             gen_input = torch.argmax(gen_output, dim=1)
 
             outputs.append(self.vocab.id2word[gen_input])
-            # print(self.vocab.id2word[gen_input])
             # if count > input_length:
             #     break
         
@@ -224,10 +224,10 @@ class Model(nn.Module):
     def train_max_epochs(self, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, save_epochs_flag=False, 
             save_epochs=20, save_batch_flag=False, save_batch=5):
         self.train()
-        enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate)
-        gen_optim = optim.AdamW(self.generator.parameters(), lr=args.learning_rate)
-        discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.lr_discriminator)
-        discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.lr_discriminator)
+        enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
+        gen_optim = optim.AdamW(self.generator.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
+        discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
+        discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         save_model_path = os.path.join(args.save_model_path, get_filename(args, "model"))
 
         for epoch in range(no_of_epochs):
@@ -264,41 +264,43 @@ class Model(nn.Module):
 
                 loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction = self.train_util(batch0, batch1)
 
-                losses_adv1.append(loss_adv1)
-                losses_adv2.append(loss_adv2)
-
                 loss_reconstruction.backward()
                 enc_optim.step()
                 gen_optim.step()
 
-                # losses_enc_gen.append(loss_enc_gen)
-                rec_losses.append(loss_reconstruction)
-
-                # if epoch == 0:
-                #     loss_enc_gen.backward(retain_graph=True)
-                #     enc_optim.step()
-                #     gen_optim.step()
-                
-                # loss_adv1.backward(retain_graph=True)
-                # loss_adv2.backward()
-                # discrim1_optim.step()
-                # discrim2_optim.step()
-
-                # if flag == True:
+                # if epoch < 20:
                 #     loss_enc_gen.backward()
                 #     torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.grad_clip)
                 #     torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.grad_clip)
                 #     enc_optim.step()
                 #     gen_optim.step()
-                # else:
+                # elif epoch >= 20 and epoch < 40:
                 #     loss_adv1.backward(retain_graph=True)
                 #     loss_adv2.backward()
                 #     torch.nn.utils.clip_grad_norm_(self.discriminator1.parameters(), self.grad_clip)
                 #     torch.nn.utils.clip_grad_norm_(self.discriminator2.parameters(), self.grad_clip)
                 #     discrim1_optim.step()
                 #     discrim2_optim.step()
+                # else:
+                #     if flag == True:
+                #         loss_enc_gen.backward()
+                #         torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.grad_clip)
+                #         torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.grad_clip)
+                #         enc_optim.step()
+                #         gen_optim.step()
+                #     else:
+                #         loss_adv1.backward(retain_graph=True)
+                #         loss_adv2.backward()
+                #         torch.nn.utils.clip_grad_norm_(self.discriminator1.parameters(), self.grad_clip)
+                #         torch.nn.utils.clip_grad_norm_(self.discriminator2.parameters(), self.grad_clip)
+                #         discrim1_optim.step()
+                #         discrim2_optim.step()
+                #     flag = not flag
 
-                # flag = not flag
+                losses_enc_gen.append(loss_enc_gen.detach())
+                losses_adv1.append(loss_adv1.detach())
+                losses_adv2.append(loss_adv2.detach())
+                rec_losses.append(loss_reconstruction.detach())
 
             if self.args.dev:
                 
@@ -333,6 +335,7 @@ class Model(nn.Module):
             self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2))))
 
             writer.add_scalars('All_losses', {
+                'recon-loss': torch.mean(torch.tensor(rec_losses)),
                 'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
                 'D1': torch.mean(torch.tensor(losses_adv1)),
                 'D2': torch.mean(torch.tensor(losses_adv2))
@@ -352,6 +355,7 @@ class Model(nn.Module):
                 self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2_dev))))
 
                 writer.add_scalars('All_losses_dev', {
+                    'recon-loss': torch.mean(torch.tensor(rec_losses)),
                     'enc-gen': torch.mean(torch.tensor(losses_enc_gen_dev)),
                     'D1': torch.mean(torch.tensor(losses_adv1_dev)),
                     'D2': torch.mean(torch.tensor(losses_adv2_dev))

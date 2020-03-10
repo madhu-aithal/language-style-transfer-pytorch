@@ -97,7 +97,7 @@ if __name__ == '__main__':
             model.eval()
             test_input_tensor = torch.tensor(test_input_processed).t()
             # output = model.predict_autoencoder(test_input_tensor)
-            output = model.predict(test_input_tensor, 1)
+            output = model.predict(test_input_tensor, 0)
             print(output)
             logger.info("Reconstructed sentence: "+str(output))
 

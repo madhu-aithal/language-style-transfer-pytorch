@@ -2,87 +2,48 @@ import torch
 import torch.nn as nn
 from utils import *
 
-PATH = "model_saves/model.cross-alignment.0.001.100.03-03-2020.14:53.epoch_100"
+PATH = "model_saves/model_0.001_200_15:27_03-09-2020"
 
 model = torch.load(PATH)
 model.training = False
 
+def predict(test_inputs, sentiment):    
+    for test_input in test_inputs:
+        test_input = [val for val in test_input.split(" ")]
 
-def predict_util(model, input_data, target, target_sentiment):
-    # target = torch.tensor(target, device=model.device)
-    # target = target.unsqueeze(0)
-    input_length = input_data.size()[0]
-    latent_z = model.get_latent_reps(input_data)
+        test_input_processed = []
+        for val in test_input:
+            if val not in model.vocab.word2id:
+                test_input_processed.append(model.vocab.word2id['<unk>'])
+            else:
+                test_input_processed.append(model.vocab.word2id[val])
 
-    criterion = nn.CrossEntropyLoss(ignore_index=model.vocab.word2id['<pad>'])
+        print("Input: ", test_input)
+        
+        with torch.no_grad():
+            model.eval()
+            test_input_tensor = torch.tensor(test_input_processed, device=model.device).unsqueeze(1)            
+            output = model.predict(test_input_tensor, sentiment)
+            print("Reconstructed input:", output)
+        
+        print("--------------------")
+        print()
 
-    # latent_z = hidden_states_original[-1,:,:]
-    if target_sentiment == 1:
-        latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],model.args.dim_y],
-                        dtype=torch.float,device=model.device)), dim=2)
-    else:
-        latent_z = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],model.args.dim_y],
-                        dtype=torch.float,device=model.device)), dim=2)
-    
-    gen_input = torch.tensor([model.GO_token], device=model.device)
-    gen_hidden = latent_z
+if __name__ == "__main__":
+    test_input_0 = ["the steak was rough and bad .",
+    "it really feels like a total lack of effort , honesty and professionalism .",
+    "i was not impressed at all .",
+    "seriously though , their food is so bad .",
+    "service was just awful ."]
 
-    outputs = []
-    gen_output = torch.zeros(model.output_size_gen, device=model.device)
-    count = 0
-    while torch.argmax(gen_output) != model.EOS_token:
-        print(model.vocab.id2word[gen_input])
-        gen_input = gen_input.unsqueeze(0)
-        gen_input = gen_input.unsqueeze(2)
-        gen_input = model.encoder.embedding(gen_input).squeeze(2)
-        gen_input = model.dropout(gen_input)
+    test_input_1 = ["the breakfast was the best and the women helping with the breakfast were amazing !",
+    "it 's a good place to hang out .",
+    "real nice place .",
+    "by far the best cake donuts in pittsburgh .",
+    "the sushi was surprisingly good ."]
 
-        gen_output, gen_hidden = model.generator(
-            gen_input, gen_hidden)
-        gen_input = torch.argmax(gen_output, dim=1)
-        # if count > 0:
-        #     loss = criterion(gen_output, target[count-1,:])
-        outputs.append(model.vocab.id2word[gen_input])
-
-        count += 1
-        # print(model.vocab.id2word[gen_input])
-        # if count > input_length:
-        #     break
-    
-    return outputs
-
-def predict():
-    test_input = ["the staff is friendly ."]
-    # target = ["<eos>"]
-    target = test_input
-    test_input = [val.split() for val in test_input]
-    target_input = [val.split() for val in target]
-
-    test_input_processed = []
-    target_input_processed = []
-    for list_val1,list_val2 in zip(test_input, target_input):
-        temp_list = []
-        for val in list_val1:
-            temp_list.append(model.vocab.word2id[val])
-        test_input_processed.append(temp_list)
-
-        temp_list = []
-        for val in list_val2:
-            temp_list.append(model.vocab.word2id[val])
-        target_input_processed.append(temp_list)
-
-    print(test_input_processed)
-    print(target_input_processed)
-    # dev0 = load_sent('/home/madhu/language-style-transfer-pytorch/data/yelp/sentimentshort.dev' + '.0')
-    # dev1 = load_sent('/home/madhu/language-style-transfer-pytorch/data/yelp/sentimentshort.dev' + '.1')
-    # batches0, batches1, _, _ = get_batches(dev0, dev1, vocab.word2id,
-    #             args.batch_size, noisy=True)
-
-    with torch.no_grad():
-        model.eval()
-        test_input_tensor = torch.tensor(test_input_processed, device=model.device).t()
-        target_input_tensor = torch.tensor(target_input_processed, device=model.device).t()
-        output = model.predict(test_input_tensor, 1)
-        print(output)
-
-predict()
+    print("Negative sentences")
+    predict(test_input_0, sentiment=0)
+    print("-----------------")
+    print("Positive sentences")
+    predict(test_input_1, sentiment=1)
