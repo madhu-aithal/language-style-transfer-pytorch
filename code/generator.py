@@ -23,7 +23,10 @@ class Generator(nn.Module):
         # print("input: ", input.size())
         # print("hidden: ", hidden.size())
         output, hidden = self.gru(input, hidden)
+        # assert not False in (hidden==hidden)
+        # assert not False in (output==output)
         output = self.out(output[0])
+        # assert not False in (output==output)
         # output = self.softmax(self.out(output[0]))
         return output, hidden
 

@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from utils import *
 
-PATH = "model_saves/model_0.001_200_15:27_03-09-2020"
+PATH = "model_saves/model_0.0005_60_17:47_03-10-2020"
 
 model = torch.load(PATH)
 model.training = False
 
-def predict(test_inputs, sentiment):    
+def predict(test_inputs, sentiment, greedy_search=True):    
     for test_input in test_inputs:
         test_input = [val for val in test_input.split(" ")]
 
@@ -22,8 +22,11 @@ def predict(test_inputs, sentiment):
         
         with torch.no_grad():
             model.eval()
-            test_input_tensor = torch.tensor(test_input_processed, device=model.device).unsqueeze(1)            
-            output = model.predict(test_input_tensor, sentiment)
+            test_input_tensor = torch.tensor(test_input_processed, device=model.device).unsqueeze(1)     
+            if greedy_search == True:
+                output = model.predict_greedy_search(test_input_tensor, sentiment)
+            else:
+                output = model.predict_beam_search(test_input_tensor, sentiment, 10)
             print("Reconstructed input:", output)
         
         print("--------------------")

@@ -80,25 +80,25 @@ if __name__ == '__main__':
         model.train_max_epochs(args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer)
 
                 
-        test_input = ["the staff is friendly ."]
-        test_input = [val.split() for val in test_input]
+        # test_input = ["the staff is friendly ."]
+        # test_input = [val.split() for val in test_input]
 
-        test_input_processed = []
-        for list_val in test_input:
-            temp_list = []
-            for val in list_val:
-                temp_list.append(model.vocab.word2id[val])
-            test_input_processed.append(temp_list)
-        print(test_input_processed)
-        print(test_input)
-        logger.info("Test input: "+str(test_input))
-        logger.info("Test input vector: "+str(test_input_processed))
-        with torch.no_grad():
-            model.eval()
-            test_input_tensor = torch.tensor(test_input_processed).t()
-            # output = model.predict_autoencoder(test_input_tensor)
-            output = model.predict(test_input_tensor, 0)
-            print(output)
-            logger.info("Reconstructed sentence: "+str(output))
+        # test_input_processed = []
+        # for list_val in test_input:
+        #     temp_list = []
+        #     for val in list_val:
+        #         temp_list.append(model.vocab.word2id[val])
+        #     test_input_processed.append(temp_list)
+        # print(test_input_processed)
+        # print(test_input)
+        # logger.info("Test input: "+str(test_input))
+        # logger.info("Test input vector: "+str(test_input_processed))
+        # with torch.no_grad():
+        #     model.eval()
+        #     test_input_tensor = torch.tensor(test_input_processed).t()
+        #     # output = model.predict_autoencoder(test_input_tensor)
+        #     output = model.predict_greedy_search(test_input_tensor, 0)
+        #     print(output)
+        #     logger.info("Reconstructed sentence: "+str(output))
 
         

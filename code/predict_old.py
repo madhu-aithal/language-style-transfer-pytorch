@@ -1,20 +1,21 @@
 import torch 
 import torch.nn as nn
 from utils import *
+import numpy as np
 
-PATH = "model_saves/model_0.001_200_15:27_03-09-2020"
+PATH = "model_saves/model_0.0005_70_12:18_03-10-2020"
 
 model = torch.load(PATH)
 model.training = False
 
 
-def predict_util(model, input_data, target, target_sentiment):
+def predict_beam_search(model, input_data, target, target_sentiment, k):
     # target = torch.tensor(target, device=model.device)
     # target = target.unsqueeze(0)
-    input_length = input_data.size()[0]
+    # input_length = input_data.size()[0]
     latent_z = model.get_latent_reps(input_data)
 
-    criterion = nn.CrossEntropyLoss(ignore_index=model.vocab.word2id['<pad>'])
+    # criterion = nn.CrossEntropyLoss(ignore_index=model.vocab.word2id['<pad>'])
 
     # latent_z = hidden_states_original[-1,:,:]
     if target_sentiment == 1:
@@ -26,16 +27,13 @@ def predict_util(model, input_data, target, target_sentiment):
     
     gen_input = torch.tensor([model.GO_token], device=model.device)
     gen_hidden = latent_z
-    k = 5
     outputs = []
     gen_output = torch.zeros(model.output_size_gen, device=model.device)
     result = []
     count = 0
     while torch.argmax(gen_output) != model.EOS_token:
         if len(result) == k:
-            break
-        # print(model.vocab.id2word[gen_input])
-        # print(outputs)
+            break        
         if count == 0:
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
@@ -45,82 +43,46 @@ def predict_util(model, input_data, target, target_sentiment):
             gen_output, gen_hidden = model.generator(
                 gen_input, gen_hidden)
             
-            # gen_input = torch.argmax(gen_output, dim=1)
             topv, topi = gen_output.topk(k)
-            for i in range(topv.size()[1]):
-                temp = topi[:,i].item()
-                
+            for i in range(topv.size()[1]):                
                 outputs.append({
                     "sequence": [topi[:,i].item()],
-                    "score": topv[:,i].item()
+                    "score": np.log(topv[:,i].item())
                 })
                 if topi[:,i].item() == model.EOS_token:
                     result.append(outputs[-1])
-                    # outputs.remove(len(outputs)-1)
                     del outputs[-1]
             
-            # if model.EOS_token in topi:
-            #     break
         else:
             outputs_old = outputs.copy()
             outputs = []
             for val in outputs_old:
-                gen_input = torch.tensor(val["sequence"][-1], device=model.device)
-                gen_input = gen_input.unsqueeze(0)
-                gen_input = gen_input.unsqueeze(1)
-                gen_input = gen_input.unsqueeze(2)
+                gen_input = torch.tensor(val["sequence"][-1], device=model.device).view(1,1,1)
                 gen_input = model.encoder.embedding(gen_input).squeeze(2)
                 gen_input = model.dropout(gen_input)
 
                 gen_output, gen_hidden = model.generator(
                     gen_input, gen_hidden)
                 
-                # gen_input = torch.argmax(gen_output, dim=1)
                 topv, topi = gen_output.topk(k)
 
-                for i in range(topv.size()[1]):      
-                    temp = val["sequence"] 
-                    temp2 = [topi[:,i].item()]
+                for i in range(topv.size()[1]):                          
                     outputs.append({
-                        "sequence": temp+temp2,
-                        "score": val["score"]*topv[:,i].item()
+                        "sequence": val["sequence"] + [topi[:,i].item()],
+                        "score": np.log(val["score"])+np.log(topv[:,i].item())
                     })
                     if topi[:,i].item() == model.EOS_token:
                         result.append(outputs[-1])
                         del outputs[-1]
-                        # outputs.remove(len(outputs)-1)
-                
-                # if model.EOS_token in topi:
-                #     break
-            # outputs = outputs+[(val*v, i) for v,i in zip(topv, topi)]
-            # outputs_index = outputs_index+topi
-            # k_outputs.append(topv)
+                        
             outputs = sorted(outputs, key = lambda i: i['score'], reverse = True)
             outputs = outputs[:k]
-            
-
-        # k_square_values = []
-        # for dict_val in topk_values:
-        #     score = dict_val["score"]
-        #     for val in k_outputs:
-
-        # if count > 0:
-        #     temp = target[count-1,:]
-        #     temp2 = gen_output[:,temp]
-        #     temp3 = torch.log(torch.sum(torch.exp(gen_output)))
-        #     loss = criterion(gen_output, temp)
-        # outputs.append(model.vocab.id2word[gen_input])
-
         count += 1
-        # print(model.vocab.id2word[gen_input])
-        # if count > input_length:
-        #     break
-    final_sentences = []
     result = sorted(result, key = lambda i: i['score'], reverse = True)
     
     for output in result:
-        final_sentences.append([model.vocab.id2word[val] for val in output["sequence"]])
-    return final_sentences
+        output["sentence"]=[model.vocab.id2word[val] for val in output["sequence"]]
+    return result
 
 def predict(test_inputs, sentiment):    
     # target = ["<eos>"]
@@ -159,7 +121,7 @@ def predict(test_inputs, sentiment):
             test_input_tensor = torch.tensor(test_input_processed, device=model.device).unsqueeze(1)
             target_input_tensor = torch.tensor(target_input_processed, device=model.device).unsqueeze(1)
             # output = model.predict(test_input_tensor, sentiment)
-            output = predict_util(model, test_input_tensor, target_input_tensor, sentiment)
+            output = predict_beam_search(model, test_input_tensor, target_input_tensor, sentiment, 5)
             print("Reconstructed input:", output)
         
         print("--------------------")

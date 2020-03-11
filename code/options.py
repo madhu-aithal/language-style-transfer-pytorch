@@ -75,7 +75,7 @@ def load_arguments():
             default=100)
     argparser.add_argument('--learning_rate',
             type=float,
-            default=0.001)
+            default=0.0005)
     argparser.add_argument('--lr_discriminator',
             type=float,
             default=0.005)

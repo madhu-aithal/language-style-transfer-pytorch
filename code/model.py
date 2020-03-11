@@ -21,6 +21,8 @@ from encoder import Encoder
 from generator import Generator
 from discriminator import Discriminator
 
+DISCRIMINATOR_PATH = "models/model_0.0005_30_18:28_03-10-2020"
+AUTOENCODER_PATH = "models/model_0.0005_50_19:35_03-10-2020"
 
 class Model(nn.Module):
     def __init__(self, args, input_size_enc, embedding_size_enc, hidden_size_enc, 
@@ -36,6 +38,15 @@ class Model(nn.Module):
         self.vocab = vocab
         self.dropout = nn.Dropout(self.dropout_p)
         self.args = args
+
+        # Loading the components of the pretrained model and assigning it to the current model
+        autoencoder_model = torch.load(AUTOENCODER_PATH)
+        discriminator_model = torch.load(DISCRIMINATOR_PATH)
+
+        # self.generator = autoencoder_model.generator.to(self.device)
+        # self.encoder = autoencoder_model.encoder.to(self.device)
+        # self.discriminator1 = discriminator_model.discriminator1.to(self.device)
+        # self.discriminator2 = discriminator_model.discriminator2.to(self.device)
 
         self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
         self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
@@ -53,6 +64,8 @@ class Model(nn.Module):
         self.grad_clip = 30.0
         
 
+    # Encoder
+    # Takes x and finds the latent representation z
     def get_latent_reps(self, input_data):
 
         if torch.cuda.is_available():
@@ -70,14 +83,10 @@ class Model(nn.Module):
         if torch.cuda.is_available():
             input_tensor = input_tensor.to(device=self.device)
 
-        # encoder_hidden_states = torch.zeros(input_length, 1, batch_size, self.encoder.hidden_size, device=self.device)
-
         for ei in range(input_length):
             encoder_output, encoder_hidden = self.encoder(
                 input_tensor[ei,:,:], encoder_hidden)
-            # encoder_hidden_states[ei] = encoder_hidden 
 
-        # return encoder_hidden_states[-1]
         return encoder_hidden
 
     def gumbel_softmax(self, logits, eps=1e-20):
@@ -86,11 +95,10 @@ class Model(nn.Module):
         result = self.softmax((logits + G) / self.gamma)
         return result
 
-    def predict(self, input_data, target_sentiment):
-        # input_length = input_data.size()[0]
+    # Greedy search prediction used for testing some sample inputs
+    def predict_greedy_search(self, input_data, target_sentiment):
         latent_z = self.get_latent_reps(input_data)
 
-        # latent_z = hidden_states_original[-1,:,:]
         if target_sentiment == 1:
             latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), dim=2)
@@ -103,10 +111,8 @@ class Model(nn.Module):
 
         outputs = []
         gen_output = torch.zeros(self.output_size_gen, device=self.device)
-        # count = 0
+        
         while torch.argmax(gen_output) != self.EOS_token:
-
-            # count += 1
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
@@ -117,10 +123,80 @@ class Model(nn.Module):
             gen_input = torch.argmax(gen_output, dim=1)
 
             outputs.append(self.vocab.id2word[gen_input])
-            # if count > input_length:
-            #     break
-        
+
         return outputs
+
+    # Beam search prediction used for testing some sample inputs
+    def predict_beam_search(self, input_data, target_sentiment, k):
+        latent_z = self.get_latent_reps(input_data)
+
+        if target_sentiment == 1:
+            latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
+                            dtype=torch.float,device=self.device)), dim=2)
+        else:
+            latent_z = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],self.args.dim_y],
+                            dtype=torch.float,device=self.device)), dim=2)
+        
+        gen_input = torch.tensor([self.GO_token], device=self.device)
+        gen_hidden = latent_z
+        outputs = []
+        gen_output = torch.zeros(self.output_size_gen, device=self.device)
+        result = []
+        count = 0
+        softmax = torch.nn.Softmax(dim=1)
+        while torch.argmax(gen_output) != self.EOS_token:
+            if len(result) == k:
+                break        
+            if count == 0:
+                gen_input = gen_input.unsqueeze(0)
+                gen_input = gen_input.unsqueeze(2)
+                gen_input = self.encoder.embedding(gen_input).squeeze(2)
+                gen_input = self.dropout(gen_input)
+
+                gen_output, gen_hidden = self.generator(
+                    gen_input, gen_hidden)
+                gen_output = softmax(gen_output)
+                topv, topi = gen_output.topk(k)
+                for i in range(topv.size()[1]):                
+                    outputs.append({
+                        "sequence": [topi[:,i].item()],
+                        "score": np.log(topv[:,i].item())
+                    })
+                    if topi[:,i].item() == self.EOS_token:
+                        result.append(outputs[-1])
+                        del outputs[-1]
+                
+            else:
+                outputs_old = outputs.copy()
+                outputs = []
+                for val in outputs_old:
+                    gen_input = torch.tensor(val["sequence"][-1], device=self.device).view(1,1,1)
+                    gen_input = self.encoder.embedding(gen_input).squeeze(2)
+                    gen_input = self.dropout(gen_input)
+
+                    gen_output, gen_hidden = self.generator(
+                        gen_input, gen_hidden)
+                    
+                    topv, topi = gen_output.topk(k)
+
+                    for i in range(topv.size()[1]):                          
+                        outputs.append({
+                            "sequence": val["sequence"] + [topi[:,i].item()],
+                            "score": np.log(val["score"])+np.log(topv[:,i].item())
+                        })
+                        if topi[:,i].item() == self.EOS_token:
+                            result.append(outputs[-1])
+                            del outputs[-1]
+                            
+                outputs = sorted(outputs, key = lambda i: i['score'], reverse = True)
+                outputs = outputs[:k]
+            count += 1
+        result = sorted(result, key = lambda i: i['score'], reverse = True)
+        
+        for output in result:
+            output["sentence"]=[self.vocab.id2word[val] for val in output["sequence"]]
+        return result
+
 
     # Generate X using [y,z] where y is style attribute and z is the latent content obtained from the encoder
     def generate_x(self, hidden_vec, true_outputs, criterion, teacher_forcing=False):
@@ -139,19 +215,27 @@ class Model(nn.Module):
 
         gen_input = gen_input.unsqueeze(0)
         gen_input = gen_input.unsqueeze(2)
-        gen_input = self.encoder.embedding(gen_input).squeeze(2)
-
+        gen_input_new = self.encoder.embedding(gen_input).squeeze(2)
+        # if False in (gen_input_new==gen_input_new):
+        #     print() 
+        gen_input = gen_input_new
+        # self.logger.info("true_outputs: "+str(true_outputs))
         for i in range(input_length):            
             gen_output, gen_hidden = gen(
-                gen_input, gen_hidden)
-
-            loss = criterion(gen_output, true_outputs[i,:])
-            losses[i] = loss
+                gen_input, gen_hidden)            
+            # assert not False in (gen_output==gen_output)
+            # if False in (gen_output==gen_output):
+            #     print()
+            gen_output = gen_output+1e-8
+            # self.logger.info("i: "+str(i))
+            # self.logger.info("gen output "+str(gen_output[0]))
+            
             gen_hid_states[i] = gen_hidden
 
             if teacher_forcing == True:
+                loss = criterion(gen_output, true_outputs[i,:])
+                losses[i] = loss
                 gen_input = true_outputs[i,:]
-                # print(self.vocab.id2word[gen_input[0]])
                 gen_input = gen_input.unsqueeze(0)
                 gen_input = gen_input.unsqueeze(2)
                 gen_input = self.encoder.embedding(gen_input).squeeze(2)
@@ -159,13 +243,15 @@ class Model(nn.Module):
                 gen_input = self.gumbel_softmax(gen_output)
                 gen_input = gen_input.unsqueeze(0)
                 gen_input = torch.matmul(gen_input, self.encoder.embedding.weight)
-                
+        
         avg_loss = 0
         avg_loss = torch.mean(losses)
-
+        # self.logger.info("avg loss: "+str(avg_loss))
         return gen_hid_states, avg_loss
 
-    def train_one_batch(self, training_data, target, learning_rate, sentiment):
+    # Train one batch of positive or negative samples
+    # Returns h1 and h1~ or h2 and h2~
+    def train_one_batch(self, training_data, target, sentiment):
        
         criterion = nn.CrossEntropyLoss(ignore_index=self.vocab.word2id['<pad>'], reduction='mean', size_average=True)
         latent_z = self.get_latent_reps(training_data)
@@ -182,12 +268,14 @@ class Model(nn.Module):
             latent_z_translated = torch.cat((latent_z, torch.zeros([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), 2)
         hidden_states_original, loss_original = self.generate_x(latent_z_original, target, criterion, teacher_forcing=True)
-        hidden_states_translated, loss_translated = self.generate_x(latent_z_translated, target, criterion, teacher_forcing=False)
+        hidden_states_translated, _ = self.generate_x(latent_z_translated, target, criterion, teacher_forcing=False)
 
         avg_loss = torch.mean(loss_original)
 
         return hidden_states_original, hidden_states_translated, avg_loss
 
+
+    # Trains one set of positive and negative samples batch
     def train_util(self, batch0, batch1):
 
         batch0_input = batch0["enc_inputs"]
@@ -202,8 +290,10 @@ class Model(nn.Module):
         target_batch1 = torch.tensor(batch1["targets"], device=self.device).t()
         # batch1_input = torch.cat((batch1_input, torch.ones([batch1_input.shape[0],1],dtype=torch.long,device=self.device)), dim=1)
         
-        h1, h1_tilde, loss0 = self.train_one_batch(batch0_input, target_batch0, self.args.learning_rate, 0)
-        h2, h2_tilde, loss1 = self.train_one_batch(batch1_input, target_batch1, self.args.learning_rate, 1)
+        # 0 represents that the sample/batch has negative sentiment
+        # 1 represents that the sample/batch has positive sentiment
+        h1, h1_tilde, loss0 = self.train_one_batch(batch0_input, target_batch0, 0)
+        h2, h2_tilde, loss1 = self.train_one_batch(batch1_input, target_batch1, 1)
         
         # Permuting so that the input for discriminator is in the 
         # format (Batch,Channels,H,W) (changed from (H,Channels,Batch,W))
@@ -230,13 +320,14 @@ class Model(nn.Module):
         discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         save_model_path = os.path.join(args.save_model_path, get_filename(args, "model"))
 
+        flag = True
         for epoch in range(no_of_epochs):
 
             random.shuffle(train0)
             random.shuffle(train1)
             batches0, batches1, _1, _2 = get_batches(train0, train1, vocab.word2id,
             args.batch_size, noisy=True)
-
+            
             random.shuffle(batches0)
             random.shuffle(batches1)
             print("Epoch: ", epoch)
@@ -252,11 +343,10 @@ class Model(nn.Module):
             losses_adv2_dev = []
             rec_losses_dev = []
             i = 0
-
             flag = True
             for batch0, batch1 in zip(batches0, batches1):
                 i += 1
-
+                # print(i)
                 enc_optim.zero_grad()
                 gen_optim.zero_grad()
                 discrim1_optim.zero_grad()
@@ -264,39 +354,54 @@ class Model(nn.Module):
 
                 loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction = self.train_util(batch0, batch1)
 
-                loss_reconstruction.backward()
-                enc_optim.step()
-                gen_optim.step()
+
+                # Train only autoencoder part
+                # loss_reconstruction.backward()
+                # torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                # torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                # enc_optim.step()
+                # gen_optim.step()
+
+                # Train only discriminators
+                # loss_adv1.backward(retain_graph=True)
+                # loss_adv2.backward()
+                # torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                # torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                # discrim1_optim.step()
+                # discrim2_optim.step()
 
                 # if epoch < 20:
                 #     loss_enc_gen.backward()
-                #     torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.grad_clip)
-                #     torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.grad_clip)
+                #     torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                #     torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
                 #     enc_optim.step()
                 #     gen_optim.step()
                 # elif epoch >= 20 and epoch < 40:
                 #     loss_adv1.backward(retain_graph=True)
                 #     loss_adv2.backward()
-                #     torch.nn.utils.clip_grad_norm_(self.discriminator1.parameters(), self.grad_clip)
-                #     torch.nn.utils.clip_grad_norm_(self.discriminator2.parameters(), self.grad_clip)
+                #     torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                #     torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
                 #     discrim1_optim.step()
                 #     discrim2_optim.step()
                 # else:
-                #     if flag == True:
-                #         loss_enc_gen.backward()
-                #         torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.grad_clip)
-                #         torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.grad_clip)
-                #         enc_optim.step()
-                #         gen_optim.step()
-                #     else:
-                #         loss_adv1.backward(retain_graph=True)
-                #         loss_adv2.backward()
-                #         torch.nn.utils.clip_grad_norm_(self.discriminator1.parameters(), self.grad_clip)
-                #         torch.nn.utils.clip_grad_norm_(self.discriminator2.parameters(), self.grad_clip)
-                #         discrim1_optim.step()
-                #         discrim2_optim.step()
-                #     flag = not flag
-
+                if flag == True:
+                    loss_enc_gen.backward()
+                    torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                    torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                    enc_optim.step()
+                    gen_optim.step()
+                else:
+                    loss_adv1.backward(retain_graph=True)
+                    loss_adv2.backward()
+                    torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                    torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                    discrim1_optim.step()
+                    discrim2_optim.step()
+                
+                
+                # self.logger.info("One backprop over, batch="+str(i)+", epoch="+str(epoch))
+                # if False in (self.encoder.embedding.weight==self.encoder.embedding.weight):
+                #     print() 
                 losses_enc_gen.append(loss_enc_gen.detach())
                 losses_adv1.append(loss_adv1.detach())
                 losses_adv2.append(loss_adv2.detach())
@@ -320,7 +425,7 @@ class Model(nn.Module):
                     losses_enc_gen_dev.append(loss_enc_gen)
                     rec_losses_dev.append(loss_reconstruction)
 
-
+            flag = not flag
             if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
                 torch.save(self, save_model_path)
 
