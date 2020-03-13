@@ -2,7 +2,9 @@
 model_saves/
 runs/
 runs-saved/
+runs-old/
 saves/
+models/
 old/
 __pycache__/
 tmp/

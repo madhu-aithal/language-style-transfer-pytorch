@@ -21,8 +21,8 @@ from encoder import Encoder
 from generator import Generator
 from discriminator import Discriminator
 
-DISCRIMINATOR_PATH = "models/model_0.0005_30_18:28_03-10-2020"
-AUTOENCODER_PATH = "models/model_0.0005_50_19:35_03-10-2020"
+DISCRIMINATOR_PATH = "models/model_0.0005_60K_discriminator_1_epochs"
+AUTOENCODER_PATH = "models/model_0.0005_60K_autoencoder_50_epochs"
 
 class Model(nn.Module):
     def __init__(self, args, input_size_enc, embedding_size_enc, hidden_size_enc, 
@@ -42,16 +42,15 @@ class Model(nn.Module):
         # Loading the components of the pretrained model and assigning it to the current model
         autoencoder_model = torch.load(AUTOENCODER_PATH)
         discriminator_model = torch.load(DISCRIMINATOR_PATH)
+        self.generator = autoencoder_model.generator.to(self.device)
+        self.encoder = autoencoder_model.encoder.to(self.device)
+        self.discriminator1 = discriminator_model.discriminator1.to(self.device)
+        self.discriminator2 = discriminator_model.discriminator2.to(self.device)
 
-        # self.generator = autoencoder_model.generator.to(self.device)
-        # self.encoder = autoencoder_model.encoder.to(self.device)
-        # self.discriminator1 = discriminator_model.discriminator1.to(self.device)
-        # self.discriminator2 = discriminator_model.discriminator2.to(self.device)
-
-        self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
-        self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
-        self.discriminator1 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
-        self.discriminator2 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
+        # self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
+        # self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
+        # self.discriminator1 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
+        # self.discriminator2 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
 
         self.softmax = torch.nn.Softmax(dim=1)
         self.EOS_token = 2
@@ -98,7 +97,7 @@ class Model(nn.Module):
     # Greedy search prediction used for testing some sample inputs
     def predict_greedy_search(self, input_data, target_sentiment):
         latent_z = self.get_latent_reps(input_data)
-
+        input_length = input_data.size()[0]
         if target_sentiment == 1:
             latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), dim=2)
@@ -112,7 +111,10 @@ class Model(nn.Module):
         outputs = []
         gen_output = torch.zeros(self.output_size_gen, device=self.device)
         
+        count = 0
         while torch.argmax(gen_output) != self.EOS_token:
+            if count >= input_length*2:
+                break            
             gen_input = gen_input.unsqueeze(0)
             gen_input = gen_input.unsqueeze(2)
             gen_input = self.encoder.embedding(gen_input).squeeze(2)
@@ -123,13 +125,14 @@ class Model(nn.Module):
             gen_input = torch.argmax(gen_output, dim=1)
 
             outputs.append(self.vocab.id2word[gen_input])
+            count += 1
 
         return outputs
 
     # Beam search prediction used for testing some sample inputs
     def predict_beam_search(self, input_data, target_sentiment, k):
         latent_z = self.get_latent_reps(input_data)
-
+        input_length = input_data.size()[0]
         if target_sentiment == 1:
             latent_z = torch.cat((latent_z, torch.ones([1,latent_z.shape[1],self.args.dim_y],
                             dtype=torch.float,device=self.device)), dim=2)
@@ -145,7 +148,7 @@ class Model(nn.Module):
         count = 0
         softmax = torch.nn.Softmax(dim=1)
         while torch.argmax(gen_output) != self.EOS_token:
-            if len(result) == k:
+            if len(result) == k or count >= input_length*2:
                 break        
             if count == 0:
                 gen_input = gen_input.unsqueeze(0)
@@ -216,9 +219,9 @@ class Model(nn.Module):
         gen_input = gen_input.unsqueeze(0)
         gen_input = gen_input.unsqueeze(2)
         gen_input_new = self.encoder.embedding(gen_input).squeeze(2)
-        # if False in (gen_input_new==gen_input_new):
-        #     print() 
         gen_input = gen_input_new
+        if False in (gen_input_new==gen_input_new):
+            print() 
         # self.logger.info("true_outputs: "+str(true_outputs))
         for i in range(input_length):            
             gen_output, gen_hidden = gen(
@@ -246,6 +249,8 @@ class Model(nn.Module):
         
         avg_loss = 0
         avg_loss = torch.mean(losses)
+        if False in (losses==losses):
+            print() 
         # self.logger.info("avg loss: "+str(avg_loss))
         return gen_hid_states, avg_loss
 
@@ -276,8 +281,8 @@ class Model(nn.Module):
 
 
     # Trains one set of positive and negative samples batch
-    def train_util(self, batch0, batch1):
-
+    def train_util(self, batch0, batch1, epoch, writer):
+        correct_count = 0
         batch0_input = batch0["enc_inputs"]
         batch0_input = torch.tensor(batch0_input, device=self.device)
         batch0_input = batch0_input.t()
@@ -297,23 +302,38 @@ class Model(nn.Module):
         
         # Permuting so that the input for discriminator is in the 
         # format (Batch,Channels,H,W) (changed from (H,Channels,Batch,W))
-        adv1_output = self.discriminator1(h1.permute(2,1,0,3))
+        adv1_output = self.discriminator1(h1.permute(2,1,0,3))        
         adv1_output_tilde = self.discriminator1(h2_tilde.permute(2,1,0,3))
 
         adv2_output = self.discriminator2(h2.permute(2,1,0,3))
         adv2_output_tilde = self.discriminator2(h1_tilde.permute(2,1,0,3)) 
 
+        correct_count += torch.sum((adv1_output>0.5) == True)
+        correct_count += torch.sum((adv2_output>0.5) == True)
+        correct_count += torch.sum((adv1_output_tilde<0.5) == True)
+        correct_count += torch.sum((adv2_output_tilde<0.5) == True)
+        correct_count = correct_count.item()
+        correct_count /= (adv1_output.size()[0]+adv1_output_tilde.size()[0]+adv2_output.size()[0]+adv2_output_tilde.size()[0])
+
+        writer.add_scalars("Adv_Outputs", {
+            "adv1_output": adv1_output[0].item(),
+            "adv1_output_tilde": adv1_output_tilde[0].item(),
+            "adv2_output": adv2_output[0].item(),
+            "adv2_output_tilde": adv2_output_tilde[0].item()
+        }, epoch)
+
         loss_adv1 = -torch.mean(torch.log(adv1_output))-torch.mean(torch.log(1-adv1_output_tilde))                           
-        loss_adv2 = -torch.mean(torch.log(adv2_output))-torch.mean(torch.log(1-adv2_output_tilde))               
-        
+        loss_adv2 = -torch.mean(torch.log(adv2_output))-torch.mean(torch.log(1-adv2_output_tilde))    
+
         loss_reconstruction = (loss0+loss1)/2
         loss_enc_gen = loss_reconstruction - self.lambda_val*(loss_adv1+loss_adv2)
 
-        return loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction
+        return loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, correct_count
 
     def train_max_epochs(self, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, save_epochs_flag=False, 
             save_epochs=20, save_batch_flag=False, save_batch=5):
         self.train()
+
         enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         gen_optim = optim.AdamW(self.generator.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
@@ -321,6 +341,11 @@ class Model(nn.Module):
         save_model_path = os.path.join(args.save_model_path, get_filename(args, "model"))
 
         flag = True
+        pretrain_flag = False
+        autoencoder_train_flag = False
+
+        # prev_rec_avgloss = math.inf
+        # prev_disc_acc = 0
         for epoch in range(no_of_epochs):
 
             random.shuffle(train0)
@@ -344,6 +369,7 @@ class Model(nn.Module):
             rec_losses_dev = []
             i = 0
             flag = True
+            disc_tot_accuracy = 0
             for batch0, batch1 in zip(batches0, batches1):
                 i += 1
                 # print(i)
@@ -352,56 +378,44 @@ class Model(nn.Module):
                 discrim1_optim.zero_grad()
                 discrim2_optim.zero_grad()
 
-                loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction = self.train_util(batch0, batch1)
+                loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_acc = self.train_util(batch0, batch1, epoch, writer)
+                disc_tot_accuracy += disc_batch_acc
 
+                if pretrain_flag == True:
+                    if autoencoder_train_flag == True:
+                        # Train only autoencoder part
+                        # Doing backprop on loss_reconstruction (not loss_enc_gen) because I think we just need to 
+                        # train the autoencoder to reconstruct the input sentence, as part of the pretraining. 
+                        # As a result, the autoencoder will be good at its task of reconstructing the input sentence
+                        loss_reconstruction.backward()
+                        torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                        torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                        enc_optim.step()
+                        gen_optim.step()
+                    else:
+                        # Train only discriminators
+                        loss_adv1.backward(retain_graph=True)
+                        loss_adv2.backward()
+                        torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                        torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                        discrim1_optim.step()
+                        discrim2_optim.step()
+                else:                        
+                    if flag == True:
+                        loss_enc_gen.backward()
+                        torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                        torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                        enc_optim.step()
+                        gen_optim.step()
+                    else:
+                        loss_adv1.backward(retain_graph=True)
+                        loss_adv2.backward()
+                        torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                        torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                        discrim1_optim.step()
+                        discrim2_optim.step()
+                    flag = not flag
 
-                # Train only autoencoder part
-                # loss_reconstruction.backward()
-                # torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
-                # torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
-                # enc_optim.step()
-                # gen_optim.step()
-
-                # Train only discriminators
-                # loss_adv1.backward(retain_graph=True)
-                # loss_adv2.backward()
-                # torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
-                # torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
-                # discrim1_optim.step()
-                # discrim2_optim.step()
-
-                # if epoch < 20:
-                #     loss_enc_gen.backward()
-                #     torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
-                #     torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
-                #     enc_optim.step()
-                #     gen_optim.step()
-                # elif epoch >= 20 and epoch < 40:
-                #     loss_adv1.backward(retain_graph=True)
-                #     loss_adv2.backward()
-                #     torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
-                #     torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
-                #     discrim1_optim.step()
-                #     discrim2_optim.step()
-                # else:
-                if flag == True:
-                    loss_enc_gen.backward()
-                    torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
-                    torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
-                    enc_optim.step()
-                    gen_optim.step()
-                else:
-                    loss_adv1.backward(retain_graph=True)
-                    loss_adv2.backward()
-                    torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
-                    torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
-                    discrim1_optim.step()
-                    discrim2_optim.step()
-                
-                
-                # self.logger.info("One backprop over, batch="+str(i)+", epoch="+str(epoch))
-                # if False in (self.encoder.embedding.weight==self.encoder.embedding.weight):
-                #     print() 
                 losses_enc_gen.append(loss_enc_gen.detach())
                 losses_adv1.append(loss_adv1.detach())
                 losses_adv2.append(loss_adv2.detach())
@@ -417,7 +431,7 @@ class Model(nn.Module):
 
                 for batch0, batch1 in zip(batches0, batches1):
 
-                    loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction = self.train_util(batch0, batch1)
+                    loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_dev_acc = self.train_util(batch0, batch1)
 
                     losses_adv1_dev.append(loss_adv1)
                     losses_adv2_dev.append(loss_adv2)
@@ -425,9 +439,10 @@ class Model(nn.Module):
                     losses_enc_gen_dev.append(loss_enc_gen)
                     rec_losses_dev.append(loss_reconstruction)
 
-            flag = not flag
             if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
                 torch.save(self, save_model_path)
+
+            disc_tot_accuracy = 1.0*disc_tot_accuracy/i
 
             print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses)))
             print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
@@ -438,13 +453,22 @@ class Model(nn.Module):
             self.logger.info("Avg Loss of Encoder-Generator: " + str(torch.mean(torch.tensor(losses_enc_gen))))
             self.logger.info("Avg Loss of D1: " + str(torch.mean(torch.tensor(losses_adv1))))
             self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2))))
+            self.logger.info("Discriminator accuracy: " + str(disc_tot_accuracy))
 
+            writer.add_scalar("discriminator_acc", disc_tot_accuracy, epoch)
             writer.add_scalars('All_losses', {
                 'recon-loss': torch.mean(torch.tensor(rec_losses)),
                 'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
                 'D1': torch.mean(torch.tensor(losses_adv1)),
                 'D2': torch.mean(torch.tensor(losses_adv2))
             }, epoch)
+
+            if pretrain_flag == True:
+                if torch.mean(torch.tensor(rec_losses)) < 0.1:
+                    break
+
+                if disc_tot_accuracy >= 0.9:
+                    break
 
             if self.args.dev:
                 print("\nDev loss")

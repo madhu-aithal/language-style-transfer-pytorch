@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from utils import *
 
-PATH = "model_saves/model_0.0005_60_17:47_03-10-2020"
+PATH = "model_saves/model_0.0005_250_22:18_03-12-2020"
 
 model = torch.load(PATH)
 model.training = False
@@ -33,20 +33,27 @@ def predict(test_inputs, sentiment, greedy_search=True):
         print()
 
 if __name__ == "__main__":
-    test_input_0 = ["the steak was rough and bad .",
-    "it really feels like a total lack of effort , honesty and professionalism .",
-    "i was not impressed at all .",
-    "seriously though , their food is so bad .",
-    "service was just awful ."]
+    test_input_0 = [
+        # "my goodness it was so gross .",
+        "the steak was rough and bad .",
+        "it really feels like a total lack of effort , honesty and professionalism .",
+        "i was not impressed at all .",
+        "seriously though , their food is so bad .",
+        "service was just awful ."
+        ]
 
-    test_input_1 = ["the breakfast was the best and the women helping with the breakfast were amazing !",
-    "it 's a good place to hang out .",
-    "real nice place .",
-    "by far the best cake donuts in pittsburgh .",
-    "the sushi was surprisingly good ."]
+    test_input_1 = [
+        # "i love the ladies here !",
+        # "came here with my wife and her grandmother !",
+        "the breakfast was the best and the women helping with the breakfast were amazing !",
+        "it 's a good place to hang out .",
+        "real nice place .",
+        "by far the best cake donuts in pittsburgh .",
+        "the sushi was surprisingly good ."
+        ]
 
     print("Negative sentences")
-    predict(test_input_0, sentiment=0)
+    predict(test_input_0, sentiment=1)
     print("-----------------")
     print("Positive sentences")
-    predict(test_input_1, sentiment=1)
+    predict(test_input_1, sentiment=0)
