@@ -38,6 +38,12 @@ def load_arguments():
     argparser.add_argument('--load_model',
             type=bool,
             default=False)
+    argparser.add_argument('--pretrain_flag',
+            type=bool,
+            default=False)
+    argparser.add_argument('--autoencoder_pretrain_flag',
+            type=bool,
+            default=False)
 
     argparser.add_argument('--batch_size',
             type=int,

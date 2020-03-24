@@ -40,11 +40,11 @@ def get_model(args, vocab, logger):
 
     logger.info("vocab size: "+str(vocab.size))
     model = Model(args, vocab.size, args.dim_emb, args.dim_z, 
-    args.dim_z+args.dim_y, vocab.size, args.dropout_keep_prob, device, logger, vocab)
+    args.dim_z+args.dim_y, vocab.size, args.dropout_keep_prob, device, logger, vocab, 
+    lambda_val=1)
     return model
 
-if __name__ == '__main__':
-    args = load_arguments()
+def run_model(args):
     logger = init_logging(args)
     
     print("args: ", args)
@@ -77,28 +77,13 @@ if __name__ == '__main__':
         writer = SummaryWriter(summ_filename)
 
         model = get_model(args, vocab, logger)
-        model.train_max_epochs(args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer)
-
-                
-        # test_input = ["the staff is friendly ."]
-        # test_input = [val.split() for val in test_input]
-
-        # test_input_processed = []
-        # for list_val in test_input:
-        #     temp_list = []
-        #     for val in list_val:
-        #         temp_list.append(model.vocab.word2id[val])
-        #     test_input_processed.append(temp_list)
-        # print(test_input_processed)
-        # print(test_input)
-        # logger.info("Test input: "+str(test_input))
-        # logger.info("Test input vector: "+str(test_input_processed))
-        # with torch.no_grad():
-        #     model.eval()
-        #     test_input_tensor = torch.tensor(test_input_processed).t()
-        #     # output = model.predict_autoencoder(test_input_tensor)
-        #     output = model.predict_greedy_search(test_input_tensor, 0)
-        #     print(output)
-        #     logger.info("Reconstructed sentence: "+str(output))
-
+        model.train_max_epochs(args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, 
+        save_epochs_flag=True, save_epochs=2)
         
+if __name__ == '__main__':
+    args = load_arguments()
+    # batch_sizes = [64, 256, 512]
+    # for batch_size in batch_sizes:
+    #     print(f"batch size: {batch_size}")
+    #     args.batch_size = batch_size
+    run_model(args)

@@ -10,6 +10,7 @@ import random
 from datetime import datetime
 import _pickle as pickle
 from utils import *
+from torch import autograd
 
 import numpy as np
 import torch
@@ -20,13 +21,16 @@ import torch.nn.functional as F
 from encoder import Encoder
 from generator import Generator
 from discriminator import Discriminator
+from pathlib import Path
+import math
 
-DISCRIMINATOR_PATH = "models/model_0.0005_60K_discriminator_1_epochs"
-AUTOENCODER_PATH = "models/model_0.0005_60K_autoencoder_50_epochs"
+DISCRIMINATOR_PATH = "model_saves/model_0.0005_30_09:50_03-16-2020_discrminator_drop_0.2/1_epochs"
+AUTOENCODER_PATH = "model_saves/model_0.0005_1_10:42_03-18-2020_autoencoder_dropout_0.2/1_epochs"
 
 class Model(nn.Module):
     def __init__(self, args, input_size_enc, embedding_size_enc, hidden_size_enc, 
-    hidden_size_gen, output_size_gen, dropout_p, device, logger, vocab, lambda_val=1):
+    hidden_size_gen, output_size_gen, dropout_p, device, logger, vocab, lambda_val=1, 
+    pretrain_flag=False, autoencoder_train_flag=True, use_saved_models=True):
         super(Model, self).__init__()
         self.input_size_enc = input_size_enc
         self.hidden_size_enc = hidden_size_enc
@@ -38,19 +42,24 @@ class Model(nn.Module):
         self.vocab = vocab
         self.dropout = nn.Dropout(self.dropout_p)
         self.args = args
+        # self.pretrain_flag = pretrain_flag
+        # self.autoencoder_train_flag = autoencoder_train_flag
+        # self.use_saved_models = use_saved_models
 
         # Loading the components of the pretrained model and assigning it to the current model
-        autoencoder_model = torch.load(AUTOENCODER_PATH)
-        discriminator_model = torch.load(DISCRIMINATOR_PATH)
-        self.generator = autoencoder_model.generator.to(self.device)
-        self.encoder = autoencoder_model.encoder.to(self.device)
-        self.discriminator1 = discriminator_model.discriminator1.to(self.device)
-        self.discriminator2 = discriminator_model.discriminator2.to(self.device)
 
-        # self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
-        # self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
-        # self.discriminator1 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
-        # self.discriminator2 = Discriminator(args, self.device, self.hidden_size_gen, 1).to(self.device)
+        if self.args.load_model == True:
+            autoencoder_model = torch.load(AUTOENCODER_PATH)
+            discriminator_model = torch.load(DISCRIMINATOR_PATH)
+            self.generator = autoencoder_model.generator.to(self.device)
+            self.encoder = autoencoder_model.encoder.to(self.device)
+            self.discriminator1 = discriminator_model.discriminator1.to(self.device)
+            self.discriminator2 = discriminator_model.discriminator2.to(self.device)
+        else:
+            self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
+            self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
+            self.discriminator1 = Discriminator(args, self.device, self.hidden_size_gen, 1, self.dropout_p).to(self.device)
+            self.discriminator2 = Discriminator(args, self.device, self.hidden_size_gen, 1, self.dropout_p).to(self.device)
 
         self.softmax = torch.nn.Softmax(dim=1)
         self.EOS_token = 2
@@ -60,12 +69,16 @@ class Model(nn.Module):
         self.logger = logger
         self.lambda_val = lambda_val
         self.beta1, self.beta2 = 0.5, 0.999
-        self.grad_clip = 30.0
+        self.grad_clip = 20.0
         
 
-    # Encoder
-    # Takes x and finds the latent representation z
+    
     def get_latent_reps(self, input_data):
+        '''
+        Summary: Takes x and finds the latent representation z
+        Parameters:
+        input_data: (length, batchsize)
+        '''
 
         if torch.cuda.is_available():
             input_data = input_data.to(device=self.device)
@@ -221,18 +234,13 @@ class Model(nn.Module):
         gen_input_new = self.encoder.embedding(gen_input).squeeze(2)
         gen_input = gen_input_new
         if False in (gen_input_new==gen_input_new):
-            print() 
-        # self.logger.info("true_outputs: "+str(true_outputs))
+            self.logger.info("Found NaN value, exiting now")
+            sys.exit()
         for i in range(input_length):            
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)            
-            # assert not False in (gen_output==gen_output)
-            # if False in (gen_output==gen_output):
-            #     print()
-            gen_output = gen_output+1e-8
-            # self.logger.info("i: "+str(i))
-            # self.logger.info("gen output "+str(gen_output[0]))
             
+            gen_output = gen_output+1e-8            
             gen_hid_states[i] = gen_hidden
 
             if teacher_forcing == True:
@@ -249,9 +257,6 @@ class Model(nn.Module):
         
         avg_loss = 0
         avg_loss = torch.mean(losses)
-        if False in (losses==losses):
-            print() 
-        # self.logger.info("avg loss: "+str(avg_loss))
         return gen_hid_states, avg_loss
 
     # Train one batch of positive or negative samples
@@ -279,6 +284,8 @@ class Model(nn.Module):
 
         return hidden_states_original, hidden_states_translated, avg_loss
 
+    def compute_adv_loss(self, adv_output, adv_output_tilde, eps = 1e-8):
+        return -torch.mean(torch.log(adv_output+eps))-torch.mean(torch.log(1-adv_output_tilde+eps))                           
 
     # Trains one set of positive and negative samples batch
     def train_util(self, batch0, batch1, epoch, writer):
@@ -315,15 +322,15 @@ class Model(nn.Module):
         correct_count = correct_count.item()
         correct_count /= (adv1_output.size()[0]+adv1_output_tilde.size()[0]+adv2_output.size()[0]+adv2_output_tilde.size()[0])
 
-        writer.add_scalars("Adv_Outputs", {
-            "adv1_output": adv1_output[0].item(),
-            "adv1_output_tilde": adv1_output_tilde[0].item(),
-            "adv2_output": adv2_output[0].item(),
-            "adv2_output_tilde": adv2_output_tilde[0].item()
-        }, epoch)
+        # writer.add_scalars("Adv_Outputs", {
+        #     "adv1_output": adv1_output[0].item(),
+        #     "adv1_output_tilde": adv1_output_tilde[0].item(),
+        #     "adv2_output": adv2_output[0].item(),
+        #     "adv2_output_tilde": adv2_output_tilde[0].item()
+        # }, epoch)
 
-        loss_adv1 = -torch.mean(torch.log(adv1_output))-torch.mean(torch.log(1-adv1_output_tilde))                           
-        loss_adv2 = -torch.mean(torch.log(adv2_output))-torch.mean(torch.log(1-adv2_output_tilde))    
+        loss_adv1 = self.compute_adv_loss(adv1_output, adv1_output_tilde)
+        loss_adv2 = self.compute_adv_loss(adv2_output, adv2_output_tilde)
 
         loss_reconstruction = (loss0+loss1)/2
         loss_enc_gen = loss_reconstruction - self.lambda_val*(loss_adv1+loss_adv2)
@@ -331,166 +338,171 @@ class Model(nn.Module):
         return loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, correct_count
 
     def train_max_epochs(self, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, save_epochs_flag=False, 
-            save_epochs=20, save_batch_flag=False, save_batch=5):
-        self.train()
+            save_epochs=10, save_batch_flag=False, save_batch=5):
 
+        self.train()
         enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         gen_optim = optim.AdamW(self.generator.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
+        
+        Path(args.save_model_path).mkdir(parents=True, exist_ok=True)        
         save_model_path = os.path.join(args.save_model_path, get_filename(args, "model"))
-
+        Path(save_model_path).mkdir(parents=True, exist_ok=True)
         flag = True
-        pretrain_flag = False
-        autoencoder_train_flag = False
+        with autograd.detect_anomaly():
+            for epoch in range(no_of_epochs):
 
-        # prev_rec_avgloss = math.inf
-        # prev_disc_acc = 0
-        for epoch in range(no_of_epochs):
-
-            random.shuffle(train0)
-            random.shuffle(train1)
-            batches0, batches1, _1, _2 = get_batches(train0, train1, vocab.word2id,
-            args.batch_size, noisy=True)
-            
-            random.shuffle(batches0)
-            random.shuffle(batches1)
-            print("Epoch: ", epoch)
-            self.logger.info("Epoch: "+str(epoch))
-
-            losses_enc_gen = []
-            losses_adv1 = []
-            losses_adv2 = []
-            rec_losses = []
-
-            losses_enc_gen_dev = []
-            losses_adv1_dev = []
-            losses_adv2_dev = []
-            rec_losses_dev = []
-            i = 0
-            flag = True
-            disc_tot_accuracy = 0
-            for batch0, batch1 in zip(batches0, batches1):
-                i += 1
-                # print(i)
-                enc_optim.zero_grad()
-                gen_optim.zero_grad()
-                discrim1_optim.zero_grad()
-                discrim2_optim.zero_grad()
-
-                loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_acc = self.train_util(batch0, batch1, epoch, writer)
-                disc_tot_accuracy += disc_batch_acc
-
-                if pretrain_flag == True:
-                    if autoencoder_train_flag == True:
-                        # Train only autoencoder part
-                        # Doing backprop on loss_reconstruction (not loss_enc_gen) because I think we just need to 
-                        # train the autoencoder to reconstruct the input sentence, as part of the pretraining. 
-                        # As a result, the autoencoder will be good at its task of reconstructing the input sentence
-                        loss_reconstruction.backward()
-                        torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
-                        torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
-                        enc_optim.step()
-                        gen_optim.step()
-                    else:
-                        # Train only discriminators
-                        loss_adv1.backward(retain_graph=True)
-                        loss_adv2.backward()
-                        torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
-                        torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
-                        discrim1_optim.step()
-                        discrim2_optim.step()
-                else:                        
-                    if flag == True:
-                        loss_enc_gen.backward()
-                        torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
-                        torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
-                        enc_optim.step()
-                        gen_optim.step()
-                    else:
-                        loss_adv1.backward(retain_graph=True)
-                        loss_adv2.backward()
-                        torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
-                        torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
-                        discrim1_optim.step()
-                        discrim2_optim.step()
-                    flag = not flag
-
-                losses_enc_gen.append(loss_enc_gen.detach())
-                losses_adv1.append(loss_adv1.detach())
-                losses_adv2.append(loss_adv2.detach())
-                rec_losses.append(loss_reconstruction.detach())
-
-            if self.args.dev:
+                random.shuffle(train0)
+                random.shuffle(train1)
+                batches0, batches1, _1, _2 = get_batches(train0, train1, vocab.word2id,
+                args.batch_size, noisy=True)
                 
-                batches0, batches1, _1, _2 = get_batches(dev0, dev1, vocab.word2id,
-                    args.batch_size, noisy=True)
-
                 random.shuffle(batches0)
                 random.shuffle(batches1)
+                print("Epoch: ", epoch)
+                self.logger.info("Epoch: "+str(epoch))
 
+                losses_enc_gen = []
+                losses_adv1 = []
+                losses_adv2 = []
+                rec_losses = []
+
+                losses_enc_gen_dev = []
+                losses_adv1_dev = []
+                losses_adv2_dev = []
+                rec_losses_dev = []
+                i = 0
+                flag = True
+                disc_tot_accuracy = 0
                 for batch0, batch1 in zip(batches0, batches1):
+                    i += 1
+                    # print(i)
+                    # self.logger.info("i: "+str(i))
+                    enc_optim.zero_grad()
+                    gen_optim.zero_grad()
+                    discrim1_optim.zero_grad()
+                    discrim2_optim.zero_grad()
 
-                    loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_dev_acc = self.train_util(batch0, batch1)
+                    loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_acc = self.train_util(batch0, batch1, epoch, writer)
+                    disc_tot_accuracy += disc_batch_acc
 
-                    losses_adv1_dev.append(loss_adv1)
-                    losses_adv2_dev.append(loss_adv2)
+                    if self.args.pretrain_flag == True:
+                        if self.args.autoencoder_pretrain_flag == True:
+                            # Train only autoencoder part
+                            # Doing backprop on loss_reconstruction (not loss_enc_gen) because I think we just need to 
+                            # train the autoencoder to reconstruct the input sentence, as part of the pretraining. 
+                            # As a result, the autoencoder will be good at its task of reconstructing the input sentence
+                            loss_reconstruction.backward()
+                            torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                            enc_optim.step()
+                            gen_optim.step()
+                        else:
+                            # Train only discriminators
+                            loss_adv1.backward(retain_graph=True)
+                            loss_adv2.backward()
+                            torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                            discrim1_optim.step()
+                            discrim2_optim.step()
+                    else:                        
+                        if flag == True:
+                            loss_enc_gen.backward()
+                            torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                            enc_optim.step()
+                            gen_optim.step()
+                        else:
+                            loss_adv1.backward(retain_graph=True)
+                            loss_adv2.backward()
+                            torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                            discrim1_optim.step()
+                            discrim2_optim.step()
+                        flag = not flag
+                    
+                    losses_enc_gen.append(loss_enc_gen.detach())
+                    losses_adv1.append(loss_adv1.detach())
+                    losses_adv2.append(loss_adv2.detach())
+                    rec_losses.append(loss_reconstruction.detach())
 
-                    losses_enc_gen_dev.append(loss_enc_gen)
-                    rec_losses_dev.append(loss_reconstruction)
+                if self.args.dev:
+                    
+                    batches0, batches1, _1, _2 = get_batches(dev0, dev1, vocab.word2id,
+                        args.batch_size, noisy=True)
 
-            if save_epochs_flag == True and epoch%save_epochs == save_epochs-1:
-                torch.save(self, save_model_path)
+                    random.shuffle(batches0)
+                    random.shuffle(batches1)
 
-            disc_tot_accuracy = 1.0*disc_tot_accuracy/i
+                    for batch0, batch1 in zip(batches0, batches1):
 
-            print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses)))
-            print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
-            print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
-            print("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2)))
+                        loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_dev_acc = self.train_util(batch0, batch1, epoch, writer)
 
-            self.logger.info("Avg Reconstruction Loss: " + str(torch.mean(torch.tensor(rec_losses))))
-            self.logger.info("Avg Loss of Encoder-Generator: " + str(torch.mean(torch.tensor(losses_enc_gen))))
-            self.logger.info("Avg Loss of D1: " + str(torch.mean(torch.tensor(losses_adv1))))
-            self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2))))
-            self.logger.info("Discriminator accuracy: " + str(disc_tot_accuracy))
+                        losses_adv1_dev.append(loss_adv1.detach())
+                        losses_adv2_dev.append(loss_adv2.detach())
 
-            writer.add_scalar("discriminator_acc", disc_tot_accuracy, epoch)
-            writer.add_scalars('All_losses', {
-                'recon-loss': torch.mean(torch.tensor(rec_losses)),
-                'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
-                'D1': torch.mean(torch.tensor(losses_adv1)),
-                'D2': torch.mean(torch.tensor(losses_adv2))
-            }, epoch)
+                        losses_enc_gen_dev.append(loss_enc_gen.detach())
+                        rec_losses_dev.append(loss_reconstruction.detach())
 
-            if pretrain_flag == True:
-                if torch.mean(torch.tensor(rec_losses)) < 0.1:
-                    break
+                if save_epochs_flag == True and (epoch%save_epochs == save_epochs-1 or epoch == no_of_epochs-1):
+                    filename = os.path.join(save_model_path, str(epoch+1)+"_epochs")
+                    torch.save(self, filename)
 
-                if disc_tot_accuracy >= 0.9:
-                    break
+                disc_tot_accuracy = 1.0*disc_tot_accuracy/i
 
-            if self.args.dev:
-                print("\nDev loss")
-                print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses_dev)))
-                print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen_dev)))
-                print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1_dev)))
-                print("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2_dev)))
+                print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses)))
+                print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen)))
+                print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1)))
+                print("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2)))
 
-                self.logger.info("\nDev loss")
-                self.logger.info("Avg Reconstruction Loss: " + str(torch.mean(torch.tensor(rec_losses_dev))))
-                self.logger.info("Avg Loss of Encoder-Generator: " + str(torch.mean(torch.tensor(losses_enc_gen_dev))))
-                self.logger.info("Avg Loss of D1: " + str(torch.mean(torch.tensor(losses_adv1_dev))))
-                self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2_dev))))
+                self.logger.info("Avg Reconstruction Loss: " + str(torch.mean(torch.tensor(rec_losses))))
+                self.logger.info("Avg Loss of Encoder-Generator: " + str(torch.mean(torch.tensor(losses_enc_gen))))
+                self.logger.info("Avg Loss of D1: " + str(torch.mean(torch.tensor(losses_adv1))))
+                self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2))))
+                self.logger.info("Discriminator accuracy: " + str(disc_tot_accuracy))
 
-                writer.add_scalars('All_losses_dev', {
+                writer.add_scalar("discriminator_acc", disc_tot_accuracy, epoch)
+                writer.add_scalars('All_losses', {
                     'recon-loss': torch.mean(torch.tensor(rec_losses)),
-                    'enc-gen': torch.mean(torch.tensor(losses_enc_gen_dev)),
-                    'D1': torch.mean(torch.tensor(losses_adv1_dev)),
-                    'D2': torch.mean(torch.tensor(losses_adv2_dev))
+                    'enc-gen': torch.mean(torch.tensor(losses_enc_gen)),
+                    'D1': torch.mean(torch.tensor(losses_adv1)),
+                    'D2': torch.mean(torch.tensor(losses_adv2))
                 }, epoch)
-            
-            print("---------\n")
-            self.logger.info("---------\n")
+
+                if self.args.pretrain_flag == True:
+                    if self.args.autoencoder_pretrain_flag == True:
+                        if torch.mean(torch.tensor(rec_losses)) < 0.1:
+                            filename = os.path.join(save_model_path, str(epoch+1)+"_epochs")
+                            torch.save(self, filename)
+                            break
+                    else:
+                        if disc_tot_accuracy >= 0.8:
+                            filename = os.path.join(save_model_path, str(epoch+1)+"_epochs")
+                            torch.save(self, filename)
+                            break
+
+                if self.args.dev:
+                    print("\nDev loss")
+                    print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses_dev)))
+                    print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen_dev)))
+                    print("Avg Loss of D1: ", torch.mean(torch.tensor(losses_adv1_dev)))
+                    print("Avg Loss of D2: ", torch.mean(torch.tensor(losses_adv2_dev)))
+
+                    self.logger.info("\nDev loss")
+                    self.logger.info("Avg Reconstruction Loss: " + str(torch.mean(torch.tensor(rec_losses_dev))))
+                    self.logger.info("Avg Loss of Encoder-Generator: " + str(torch.mean(torch.tensor(losses_enc_gen_dev))))
+                    self.logger.info("Avg Loss of D1: " + str(torch.mean(torch.tensor(losses_adv1_dev))))
+                    self.logger.info("Avg Loss of D2: " + str(torch.mean(torch.tensor(losses_adv2_dev))))
+
+                    writer.add_scalars('All_losses_dev', {
+                        'recon-loss': torch.mean(torch.tensor(rec_losses)),
+                        'enc-gen': torch.mean(torch.tensor(losses_enc_gen_dev)),
+                        'D1': torch.mean(torch.tensor(losses_adv1_dev)),
+                        'D2': torch.mean(torch.tensor(losses_adv2_dev))
+                    }, epoch)
+                
+                print("---------\n")
+                self.logger.info("---------\n")
+        # torch.save(self, save_model_path)
              
-        torch.save(self, save_model_path)

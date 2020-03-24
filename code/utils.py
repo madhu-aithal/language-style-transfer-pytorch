@@ -3,6 +3,7 @@ import random
 from datetime import datetime
 import os
 import logging
+from pathlib import Path
 
 
 def strip_eos(sents):
@@ -117,8 +118,12 @@ def get_filename(args, util_name=""):
     return filename
 
 def init_logging(args, modelname='cross-alignment'):
+    # Path(args.log_dir).mkdir(parents=True, exist_ok=True)
+    Path(args.save_model_path).mkdir(parents=True, exist_ok=True)
+    save_log_path = os.path.join(args.save_model_path, get_filename(args, "model"))
+    Path(save_log_path).mkdir(parents=True, exist_ok=True)
     filename = str(datetime.now().strftime(get_filename(args)+".log"))
-    path = os.path.join(args.log_dir, filename)
+    path = os.path.join(save_log_path, filename)
     logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
     logger=logging.getLogger() 
     logger.setLevel(logging.DEBUG)

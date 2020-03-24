@@ -37,11 +37,12 @@ class Discriminator(nn.Module):
         
         for idx,val in enumerate(h_new):
             h_new[idx] = val.view(-1, self.num_flat_features(val))
-        h = torch.cat(h_new, dim=1)
-        h = self.dropout(h)
-        h = self.fc1(h)
-        y = self.sigmoid(h)
-
+        h1 = torch.cat(h_new, dim=1)        
+        h2 = self.dropout(h1)
+        h3 = self.fc1(h2)
+        y = self.sigmoid(h3)
+        if False in (y==y):
+            print()
         return y
 
     def num_flat_features(self, x):
