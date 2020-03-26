@@ -4,6 +4,8 @@ from datetime import datetime
 import os
 import logging
 from pathlib import Path
+import torch 
+import torch.nn as nn
 
 
 def strip_eos(sents):
@@ -111,6 +113,22 @@ def get_batches(x0, x1, word2id, batch_size, noisy=False):
 
     return batches0, batches1, order0, order1
 
+def get_batches_single(x, word2id, batch_size, noisy=False):  
+    n = len(x)
+    order = range(n)
+    z = sorted(zip(order, x), key=lambda i: len(i[1]))
+    order, x = zip(*z)
+
+    batches = []
+    s = 0
+    while s < n:
+        t = min(s + batch_size, n)
+        batches.append(get_batch(x[s:t],
+            [0]*(t-s), word2id, noisy))
+        s = t
+    
+    return batches, order
+
 def get_filename(args, util_name=""):
     filename = str(datetime.now().strftime(str(args.learning_rate)+"_"+str(args.max_epochs)+'_%H:%M_%m-%d-%Y'))
     if util_name != "":
@@ -119,8 +137,8 @@ def get_filename(args, util_name=""):
 
 def init_logging(args, modelname='cross-alignment'):
     # Path(args.log_dir).mkdir(parents=True, exist_ok=True)
-    Path(args.save_model_path).mkdir(parents=True, exist_ok=True)
-    save_log_path = os.path.join(args.save_model_path, get_filename(args, "model"))
+    Path(args.saves_path).mkdir(parents=True, exist_ok=True)
+    save_log_path = os.path.join(args.saves_path, get_filename(args, "model"))
     Path(save_log_path).mkdir(parents=True, exist_ok=True)
     filename = str(datetime.now().strftime(get_filename(args)+".log"))
     path = os.path.join(save_log_path, filename)
@@ -128,3 +146,47 @@ def init_logging(args, modelname='cross-alignment'):
     logger=logging.getLogger() 
     logger.setLevel(logging.DEBUG)
     return logger 
+
+
+def predict(model, sample_input, sentiment, beam_size=1, plain_format=True):
+    sample_input = [val for val in sample_input.split(" ")]
+    sample_input_processed = []
+    test_output = ""
+    for val in sample_input:
+        if val not in model.vocab.word2id:
+            sample_input_processed.append(model.vocab.word2id['<unk>'])
+        else:
+            sample_input_processed.append(model.vocab.word2id[val])
+
+    with torch.no_grad():
+        model.eval()
+        sample_input_tensor = torch.tensor(sample_input_processed, device=model.device).unsqueeze(1)     
+        if beam_size == 1:
+            output = model.predict_greedy_search(sample_input_tensor, sentiment)
+        else:
+            output = model.predict_beam_search(sample_input_tensor, sentiment, beam_size)
+        test_output = " ".join(output)
+    return test_output
+         
+
+
+def predict_batch(model, test_inputs, sentiment, beam_size=1, plain_format=True):
+    test_outputs = []   
+    for test_input in test_inputs:
+        # test_input = [val for val in test_input.split(" ")]
+        # test_input_processed = []
+        # for val in test_input:
+        #     if val not in model.vocab.word2id:
+        #         test_input_processed.append(model.vocab.word2id['<unk>'])
+        #     else:
+        #         test_input_processed.append(model.vocab.word2id[val])
+
+        with torch.no_grad():
+            model.eval()
+            test_input_tensor = torch.tensor(test_input, device=model.device).unsqueeze(1)     
+            if beam_size == 1:
+                output = model.predict_greedy_search(test_input_tensor, sentiment)
+            else:
+                output = model.predict_beam_search(test_input_tensor, sentiment, beam_size)
+            test_outputs.append(" ".join(output))         
+    return test_outputs

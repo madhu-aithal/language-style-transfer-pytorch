@@ -11,8 +11,7 @@ PATH = "model_saves/model_0.0005_50_01:57_03-17-2020/"
 PREDICTIONS_OUTPUT_FILE = PATH+"output_predictions"
 PREDICTIONS_INPUT_FILE = "/home/madhu/language-style-transfer-pytorch/data/yelp/sentiment.dev"
 
-def predict(model, test_inputs, sentiment, greedy_search=True, plain_format=True):
-    blue_scores = [] 
+def predict_batch(model, test_inputs, sentiment, greedy_search=True, plain_format=True):
     test_outputs = []   
     for test_input in test_inputs:
         test_input = [val for val in test_input.split(" ")]
@@ -44,6 +43,7 @@ def predict(model, test_inputs, sentiment, greedy_search=True, plain_format=True
     # blue_scores = torch.tensor(blue_scores)
     # print("avg BLEU score: ", torch.mean(blue_scores))
     return test_outputs
+
 
 if __name__ == "__main__":
     file_neg = open(PREDICTIONS_INPUT_FILE+".0", "r")
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         model.training = False
         print("Negative to positive")
         # output_file_0.write("Negative to positive \n")
-        test_outputs = predict(model, test_input_0, sentiment=1, greedy_search=True, plain_format=True)
+        test_outputs = predict_batch(model, test_input_0, sentiment=1, greedy_search=True, plain_format=True)
         output_file_0.write('\n'.join(test_outputs) + '\n')
         print("-----------------")
         print("Positive to negative")

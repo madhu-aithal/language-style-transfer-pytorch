@@ -11,9 +11,9 @@ model_0.0005_30_09:50_03-16-2020 - disc. training only, dropout prob 0.2, accura
 
 model_0.0005_50_01:00_03-17-2020 - adv training dropout prob=0.5, w/ pretrained models
 model_0.0005_50_18:54_03-16-2020 - adv training dropout prob=0.2, w/ pretrained models
-model_0.0005_50_01:57_03-17-2020 - adv training dropout prob=0.5, w/o pretrained models
+model_0.0005_50_01:57_03-17-2020 - adv training dropout prob=0.5, w/o pretrained models, batchsize = 64
 model_0.0005_50_09:57_03-17-2020 - adv training dropout prob=0.5, w/ pretrained models (ae - 5 epochs)
-model_0.0005_50_00:17_03-18-2020 - adv training dropout prob=0.2, w/o pretrained models
+model_0.0005_50_00:17_03-18-2020 - adv training dropout prob=0.2, w/o pretrained models, batchsize = 64
 
 model_0.0005_1_10:42_03-18-2020 - autoencoder pretraining, one epoch only, dropout prob=0.2
 model_0.0005_1_10:44_03-18-2020 - autoencoder pretraining, one epoch only, dropout prob=0.5
@@ -21,3 +21,6 @@ model_0.0005_50_11:35_03-18-2020 - autoencoder w/ pretraining, dropout prob=0.2,
 
 model_0.0005_50_02:01_03-19-2020 - adv training w/o pretrained models, dropout_prob=0.5, batch_size=512
 model_0.0005_50_02:04_03-19-2020 - adv training w/o pretrained models, dropout_prob=0.5, batch_size=256
+
+model_0.0005_20_11:06_03-26-2020 - adv training w/o pretrained models, dropout=0.5, batch_size=64, same number of positive and negative samples, 176787 samples in both categories
+model_0.0005_20_11:05_03-26-2020 - adv training dropout prob=0.5, w/o pretrained models, batchsize = 64

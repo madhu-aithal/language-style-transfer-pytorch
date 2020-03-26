@@ -19,22 +19,28 @@ def load_arguments():
             default=False)
     argparser.add_argument('--output',
             type=str,
-            default='')
+            default='/home/madhu/language-style-transfer-pytorch/tmp/sentiment.dev')
     argparser.add_argument('--vocab',
             type=str,
-            default='')
-    argparser.add_argument('--log_dir',
-            type=str,
-            default='../logs')
+            default='/home/madhu/language-style-transfer-pytorch/tmp/yelp.vocab')
+#     argparser.add_argument('--log_dir',
+#             type=str,
+#             default='./logs')
     argparser.add_argument('--embedding',
             type=str,
             default='')
-    argparser.add_argument('--model',
+    argparser.add_argument('--model_path',
             type=str,
             default='')
-    argparser.add_argument('--save_model_path',
+    argparser.add_argument('--target_sentiment',
             type=str,
-            default='../model_saves')
+            default='')        
+    argparser.add_argument('--saves_path',
+            type=str,
+            default='/home/madhu/language-style-transfer-pytorch/model_saves')
+    argparser.add_argument('--predict',
+            type=str,
+            default='')
     argparser.add_argument('--load_model',
             type=bool,
             default=False)
@@ -44,7 +50,12 @@ def load_arguments():
     argparser.add_argument('--autoencoder_pretrain_flag',
             type=bool,
             default=False)
-
+    argparser.add_argument('--autoencoder_path',
+            type=str,
+            default='')
+    argparser.add_argument('--discriminator_path',
+            type=str,
+            default='')
     argparser.add_argument('--batch_size',
             type=int,
             default=64)
@@ -82,9 +93,6 @@ def load_arguments():
     argparser.add_argument('--learning_rate',
             type=float,
             default=0.0005)
-    argparser.add_argument('--lr_discriminator',
-            type=float,
-            default=0.005)
     argparser.add_argument('--cuda_device',
             type=int,
             default=3)

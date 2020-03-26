@@ -9,7 +9,7 @@ import math
 import random
 from datetime import datetime
 import _pickle as pickle
-from utils import *
+import utils
 from torch import autograd
 
 import numpy as np
@@ -42,12 +42,8 @@ class Model(nn.Module):
         self.vocab = vocab
         self.dropout = nn.Dropout(self.dropout_p)
         self.args = args
-        # self.pretrain_flag = pretrain_flag
-        # self.autoencoder_train_flag = autoencoder_train_flag
-        # self.use_saved_models = use_saved_models
 
         # Loading the components of the pretrained model and assigning it to the current model
-
         if self.args.load_model == True:
             autoencoder_model = torch.load(AUTOENCODER_PATH)
             discriminator_model = torch.load(DISCRIMINATOR_PATH)
@@ -143,7 +139,7 @@ class Model(nn.Module):
         return outputs
 
     # Beam search prediction used for testing some sample inputs
-    def predict_beam_search(self, input_data, target_sentiment, k):
+    def predict_beam_search(self, input_data, target_sentiment, beam_size):
         latent_z = self.get_latent_reps(input_data)
         input_length = input_data.size()[0]
         if target_sentiment == 1:
@@ -233,9 +229,11 @@ class Model(nn.Module):
         gen_input = gen_input.unsqueeze(2)
         gen_input_new = self.encoder.embedding(gen_input).squeeze(2)
         gen_input = gen_input_new
+        
         if False in (gen_input_new==gen_input_new):
             self.logger.info("Found NaN value, exiting now")
             sys.exit()
+
         for i in range(input_length):            
             gen_output, gen_hidden = gen(
                 gen_input, gen_hidden)            
@@ -259,10 +257,12 @@ class Model(nn.Module):
         avg_loss = torch.mean(losses)
         return gen_hid_states, avg_loss
 
-    # Train one batch of positive or negative samples
-    # Returns h1 and h1~ or h2 and h2~
+    
     def train_one_batch(self, training_data, target, sentiment):
-       
+        '''
+        Train one batch of positive or negative samples
+        Returns h1 and h1~ or h2 and h2~
+        '''
         criterion = nn.CrossEntropyLoss(ignore_index=self.vocab.word2id['<pad>'], reduction='mean', size_average=True)
         latent_z = self.get_latent_reps(training_data)
         latent_z_original = []
@@ -346,16 +346,15 @@ class Model(nn.Module):
         discrim1_optim = optim.AdamW(self.discriminator1.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         
-        Path(args.save_model_path).mkdir(parents=True, exist_ok=True)        
-        save_model_path = os.path.join(args.save_model_path, get_filename(args, "model"))
-        Path(save_model_path).mkdir(parents=True, exist_ok=True)
+        Path(args.saves_path).mkdir(parents=True, exist_ok=True)        
+        saves_path = os.path.join(args.saves_path, utils.get_filename(args, "model"))
+        Path(saves_path).mkdir(parents=True, exist_ok=True)
         flag = True
         with autograd.detect_anomaly():
             for epoch in range(no_of_epochs):
-
                 random.shuffle(train0)
                 random.shuffle(train1)
-                batches0, batches1, _1, _2 = get_batches(train0, train1, vocab.word2id,
+                batches0, batches1, _1, _2 = utils.get_batches(train0, train1, vocab.word2id,
                 args.batch_size, noisy=True)
                 
                 random.shuffle(batches0)
@@ -425,28 +424,10 @@ class Model(nn.Module):
                     losses_enc_gen.append(loss_enc_gen.detach())
                     losses_adv1.append(loss_adv1.detach())
                     losses_adv2.append(loss_adv2.detach())
-                    rec_losses.append(loss_reconstruction.detach())
-
-                if self.args.dev:
-                    
-                    batches0, batches1, _1, _2 = get_batches(dev0, dev1, vocab.word2id,
-                        args.batch_size, noisy=True)
-
-                    random.shuffle(batches0)
-                    random.shuffle(batches1)
-
-                    for batch0, batch1 in zip(batches0, batches1):
-
-                        loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_dev_acc = self.train_util(batch0, batch1, epoch, writer)
-
-                        losses_adv1_dev.append(loss_adv1.detach())
-                        losses_adv2_dev.append(loss_adv2.detach())
-
-                        losses_enc_gen_dev.append(loss_enc_gen.detach())
-                        rec_losses_dev.append(loss_reconstruction.detach())
+                    rec_losses.append(loss_reconstruction.detach())                
 
                 if save_epochs_flag == True and (epoch%save_epochs == save_epochs-1 or epoch == no_of_epochs-1):
-                    filename = os.path.join(save_model_path, str(epoch+1)+"_epochs")
+                    filename = os.path.join(saves_path, str(epoch+1)+"_epochs")
                     torch.save(self, filename)
 
                 disc_tot_accuracy = 1.0*disc_tot_accuracy/i
@@ -473,16 +454,31 @@ class Model(nn.Module):
                 if self.args.pretrain_flag == True:
                     if self.args.autoencoder_pretrain_flag == True:
                         if torch.mean(torch.tensor(rec_losses)) < 0.1:
-                            filename = os.path.join(save_model_path, str(epoch+1)+"_epochs")
+                            filename = os.path.join(saves_path, str(epoch+1)+"_epochs")
                             torch.save(self, filename)
                             break
                     else:
                         if disc_tot_accuracy >= 0.8:
-                            filename = os.path.join(save_model_path, str(epoch+1)+"_epochs")
+                            filename = os.path.join(saves_path, str(epoch+1)+"_epochs")
                             torch.save(self, filename)
                             break
 
                 if self.args.dev:
+                    
+                    batches0, batches1, _, _ = utils.get_batches(dev0, dev1, vocab.word2id, args.batch_size, noisy=True)
+
+                    random.shuffle(batches0)
+                    random.shuffle(batches1)
+
+                    for batch0, batch1 in zip(batches0, batches1):
+                        loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, disc_batch_dev_acc = self.train_util(batch0, batch1, epoch, writer)
+
+                        losses_adv1_dev.append(loss_adv1.detach())
+                        losses_adv2_dev.append(loss_adv2.detach())
+
+                        losses_enc_gen_dev.append(loss_enc_gen.detach())
+                        rec_losses_dev.append(loss_reconstruction.detach())
+
                     print("\nDev loss")
                     print("Avg Reconstruction Loss: ", torch.mean(torch.tensor(rec_losses_dev)))
                     print("Avg Loss of Encoder-Generator: ", torch.mean(torch.tensor(losses_enc_gen_dev)))
@@ -504,5 +500,5 @@ class Model(nn.Module):
                 
                 print("---------\n")
                 self.logger.info("---------\n")
-        # torch.save(self, save_model_path)
+        # torch.save(self, saves_path)
              
