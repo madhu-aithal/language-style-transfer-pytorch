@@ -129,18 +129,20 @@ def get_batches_single(x, word2id, batch_size, noisy=False):
     
     return batches, order
 
-def get_filename(args, util_name=""):
-    filename = str(datetime.now().strftime(str(args.learning_rate)+"_"+str(args.max_epochs)+'_%H:%M_%m-%d-%Y'))
+def get_filename(args, time: int, util_name=""):   
+    time = datetime.fromtimestamp(int(time))
+    filename = str(time.strftime(str(args.learning_rate)+"_"+str(args.max_epochs)+'_%b-%d-%Y_%H-%M-%S'))
     if util_name != "":
         filename = util_name+"_"+filename
     return filename
 
-def init_logging(args, modelname='cross-alignment'):
+def init_logging(args, time: int, modelname='cross-alignment'):    
     # Path(args.log_dir).mkdir(parents=True, exist_ok=True)
     Path(args.saves_path).mkdir(parents=True, exist_ok=True)
-    save_log_path = os.path.join(args.saves_path, get_filename(args, "model"))
+    save_log_path = os.path.join(args.saves_path, get_filename(args, time, "model"))
     Path(save_log_path).mkdir(parents=True, exist_ok=True)
-    filename = str(datetime.now().strftime(get_filename(args)+".log"))
+    filename = get_filename(args, time)
+    filename = str(datetime.now().strftime(filename+".log"))
     path = os.path.join(save_log_path, filename)
     logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
     logger=logging.getLogger() 

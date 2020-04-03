@@ -337,9 +337,9 @@ class Model(nn.Module):
 
         return loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, correct_count
 
-    def train_max_epochs(self, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, save_epochs_flag=False, 
+    def train_max_epochs(self, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, time, save_epochs_flag=False, 
             save_epochs=10, save_batch_flag=False, save_batch=5):
-
+        print("No of epochs: ", no_of_epochs)
         self.train()
         enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         gen_optim = optim.AdamW(self.generator.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
@@ -347,7 +347,7 @@ class Model(nn.Module):
         discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         
         Path(args.saves_path).mkdir(parents=True, exist_ok=True)        
-        saves_path = os.path.join(args.saves_path, utils.get_filename(args, "model"))
+        saves_path = os.path.join(args.saves_path, utils.get_filename(args, time, "model"))
         Path(saves_path).mkdir(parents=True, exist_ok=True)
         flag = True
         with autograd.detect_anomaly():

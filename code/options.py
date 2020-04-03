@@ -22,7 +22,7 @@ def load_arguments():
             default='/home/madhu/language-style-transfer-pytorch/tmp/sentiment.dev')
     argparser.add_argument('--vocab',
             type=str,
-            default='/home/madhu/language-style-transfer-pytorch/tmp/yelp.vocab')
+            default='')
 #     argparser.add_argument('--log_dir',
 #             type=str,
 #             default='./logs')
@@ -33,8 +33,8 @@ def load_arguments():
             type=str,
             default='')
     argparser.add_argument('--target_sentiment',
-            type=str,
-            default='')        
+            type=int,
+            default=0)        
     argparser.add_argument('--saves_path',
             type=str,
             default='/home/madhu/language-style-transfer-pytorch/model_saves')

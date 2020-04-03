@@ -22,5 +22,19 @@ model_0.0005_50_11:35_03-18-2020 - autoencoder w/ pretraining, dropout prob=0.2,
 model_0.0005_50_02:01_03-19-2020 - adv training w/o pretrained models, dropout_prob=0.5, batch_size=512
 model_0.0005_50_02:04_03-19-2020 - adv training w/o pretrained models, dropout_prob=0.5, batch_size=256
 
-model_0.0005_20_11:06_03-26-2020 - adv training w/o pretrained models, dropout=0.5, batch_size=64, same number of positive and negative samples, 176787 samples in both categories
+model_0.0005_20_11:06_03-26-2020, model_0.0005_20_11:07_03-26-2020 - adv training w/o pretrained models, dropout=0.5, batch_size=64, same number of positive and negative samples, 176787 samples in both categories
 model_0.0005_20_11:05_03-26-2020 - adv training dropout prob=0.5, w/o pretrained models, batchsize = 64
+
+
+
+model_0.0005_20_22:06_03-26-2020 - model_0.0005_20_11:06_03-26-2020's translated outputs 
+
+model_0.0005_20_20:37_03-28-2020 - adv training w/o pretrained models, dropout=0.5, batch_size=64, same number of positive and negative samples, 176787 samples in both categories
+
+model_0.0005_20_Mar-28-2020_20-41-19, model_0.0005_20_Mar-28-2020_20-41-15 - adv training dropout prob=0.5, w/o pretrained models, batchsize = 64
+
+model_0.0005_20_Mar-28-2020_21-02-10 - adv training dropout prob=0.5, w/o pretrained models, batchsize = 64
+model_0.0005_20_Mar-29-2020_09-13-10 - adv training w/o pretrained models, dropout=0.5, batch_size=64, same number of positive and negative samples, 176787 samples in both categories
+
+
+model_0.0005_20_Apr-02-2020_11-42-24 - translated test outputs, using the 20 epochs model in model_0.0005_20_Mar-29-2020_09-13-10. Used the textcnn models - textcnn-snapshot/2020-03-26_14-01-27/best_steps_29400.pt, textcnn-snapshot/2020-03-26_14-01-27/best_steps_6100.pt and textcnn-snapshot/2020-03-25_00-28-02/best_steps_25400.pt for predicting the sentiment of translated outputs. The accuracy with all these models is almost same. 
