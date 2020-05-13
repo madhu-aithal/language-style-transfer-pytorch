@@ -3,6 +3,7 @@ model_saves/
 runs/
 saves/
 models/
+data/
 
 *.pt
 __pycache__/

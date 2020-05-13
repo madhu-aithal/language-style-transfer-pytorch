@@ -33,4 +33,50 @@ model_0.0005_20_Mar-28-2020_21-02-10 - adv training dropout prob=0.5, w/o pretra
 model_0.0005_20_Mar-29-2020_09-13-10 - adv training w/o pretrained models, dropout=0.5, batch_size=64, same number of positive and negative samples, 176787 samples in both categories
 
 
-model_0.0005_20_Apr-02-2020_11-42-24 - translated test outputs, using the 20 epochs model in model_0.0005_20_Mar-29-2020_09-13-10. Used the textcnn models - textcnn-snapshot/2020-03-26_14-01-27/best_steps_29400.pt, textcnn-snapshot/2020-03-26_14-01-27/best_steps_6100.pt and textcnn-snapshot/2020-03-25_00-28-02/best_steps_25400.pt for predicting the sentiment of translated outputs. The accuracy with all these models is almost same. 
+model_0.0005_20_Apr-02-2020_11-42-24 - translated test outputs, using the 20 epochs model in model_0.0005_20_Mar-29-2020_09-13-10. 
+                                        Used the textcnn models - textcnn-snapshot/2020-03-26_14-01-27/best_steps_29400.pt, textcnn-snapshot/2020-03-26_14-01-27/best_steps_6100.pt and textcnn-snapshot/2020-03-25_00-28-02/best_steps_25400.pt for predicting the sentiment of translated outputs. The accuracy with all these models is almost same. 
+
+
+
+
+model_0.0005_20_Apr-07-2020_16-15-06 - 58k tweet pairs - 20 epochs
+model_0.0005_50_Apr-07-2020_22-14-51 - 58k tweet pairs - 50 epochs
+
+model_0.0005_50_Apr-08-2020_14-33-00 - 58k tweet pairs - 50 epochs - autoencoder LR = 0.001 and discriminator LR = 0.0005
+model_0.0005_50_Apr-08-2020_17-26-10 - 58k tweet pairs - 50 epochs - autoencoder LR = 0.001 and discriminator LR = 0.0005
+
+
+model_0.0005_70_Apr-09-2020_08-00-34 - autoencoder training only, with BPE
+model_0.0005_70_Apr-09-2020_08-43-42 - discriminator training only, with BPE
+model_0.0005_50_Apr-09-2020_15-23-19 - Adv training using pretrained models. 
+                                        AE trained for 30 epochs (loss-0.5031),
+                                         discriminator trained for 1 epoch (accuracy-0.937931321496956)
+
+model_0.0005_50_Apr-12-2020_01-16-21 - Adv training using pretrained models. 
+                                        AE trained for 30 epochs (loss-0.5031),
+                                        discriminator trained for 1 epoch (accuracy-0.937931321496956),
+                                        rho 0.5
+
+model_0.0005_50_Apr-12-2020_01-20-17 - Adv training using pretrained models. 
+                                        AE trained for 30 epochs (loss-0.5031),
+                                        discriminator trained for 1 epoch (accuracy-0.937931321496956),
+                                        rho 0.7
+
+
+model_0.0005_20_Apr-09-2020_15-35-26 - Adv training w/o using pretrained models,
+                                        200K random samples from 2.6M pairs
+
+model_0.0005_20_Apr-09-2020_21-21-01 - Adv training w/o using pretrained models,
+                                        200K random samples from 2.6M pairs
+                                        rho = 0.5
+model_0.0005_20_Apr-09-2020_23-21-53 - Adv training w/o using pretrained models,
+                                        200K random samples from 2.6M pairs
+                                        rho = 1       
+
+model_0.0005_20_Apr-11-2020_11-05-30 - Adv training w/o using pretrained models,
+                                        200K random samples from 2.6M pairs
+                                        rho = 0.7
+
+model_0.0005_5_Apr-11-2020_11-12-42 - Adv training w/o using pretrained models,
+                                        200K random samples from 2.6M pairs
+                                        rho = 1, pretrained from epoch 15
