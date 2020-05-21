@@ -23,7 +23,8 @@ nohup python code/style_transfer.py \
 ```
 nohup python code/style_transfer.py \
 --test data/yelp/sentiment.test \
---model_path model_saves/model_0.0005_20_Mar-29-2020_09-13-10/20_epochs &> nohup2.out &
+--model_path model_saves/model_0.0005_20_Mar-29-2020_09-13-10/20_epochs \
+--vocab ./tmp/yelp.vocab &> nohup2.out &
 ```
 
 ```
@@ -35,8 +36,14 @@ nohup python code/style_transfer.py --saves_path ./model_saves/ \
 ```
 python code/style_transfer.py \
 --test data/twitter/tweets.test \
---model_path model_saves/model_0.0005_100_Apr-01-2020_22-10-19/100_epochs
+--model_path model_saves/model_0.0005_100_Apr-01-2020_22-10-19/100_epochs \
+--vocab ./tmp/twitter.vocab 
 ```
+
+python code/style_transfer.py \
+--predict "the service was great ." \
+--model_path model_saves/model_0.0005_100_Apr-01-2020_22-10-19/100_epochs \
+--vocab ./tmp/yelp.vocab
 
 * TextCNN testing:
 ```

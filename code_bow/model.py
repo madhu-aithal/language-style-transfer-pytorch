@@ -384,7 +384,7 @@ class Model(nn.Module):
                 disc_tot_accuracy = 0
                 batch_count = 0
                 for batch0, batch1 in zip(batches0, batches1):
-                    print(batch_count, len(batch0["enc_inputs"]), len(batch0["enc_inputs"][0]))
+                    # print(batch_count, len(batch0["enc_inputs"]), len(batch0["enc_inputs"][0]))
                     batch_count += 1
                     enc_optim.zero_grad()
                     gen_optim.zero_grad()

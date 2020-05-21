@@ -75,59 +75,34 @@ def run_model(args):
         print("args: ", args)
         logger.info("args: "+str(args))
         no_of_epochs = args.max_epochs
-        train0 = load_sent(args.train + '.0', args.max_train_size)
-        train1 = load_sent(args.train + '.1', args.max_train_size)
-
-        # Twitter data loading
-        # train0, train1 = load_sent_csvgz(args.train, args.max_train_size)
-
-
-        # if not os.path.isfile(train_filename):
-        #     with open(train_filename, "w") as f:
-        #         for sent in train0+train1:
-        #             f.write(" ".join(sent)+"\n")
+        train0 = load_sent(args.train + '.0', args.max_train_size, args.sentence_flag)
+        train1 = load_sent(args.train + '.1', args.max_train_size, args.sentence_flag)
         
-    
-        # if not os.path.isfile(train_filename+".1"):
-        #     with open(train_filename+".1", "w") as f:
-        #         for sent in train1:
-        #             f.write(" ".join(sent)+"\n")
         print('#sents of training file 0:', len(train0))
         print('#sents of training file 1:', len(train1))
 
         logger.info('#sents of training file 0: ' + str(len(train0)))
         logger.info('#sents of training file 1: ' + str(len(train1)))
 
+        # build vocab for every run
         if not os.path.isfile(args.vocab):
             build_vocab(train0 + train1, args.vocab)
-    # if not os.path.isfile(sp_model_path+".model") or not os.path.isfile(sp_model_path+".vocab"):        
-    #     spm.SentencePieceTrainer.Train('--input='+train_filename+' --model_prefix='+sp_model_path+' --vocab_size=10000 --hard_vocab_limit=false --bos_piece=<go> --eos_piece=<eos>')        
-    # sp.Load(sp_model_path+".model")
+
     vocab = Vocabulary(args.vocab, args.embedding, args.dim_emb)
     
     dev0 = []
     dev1 = []
     
     if args.dev:
-        dev0 = load_sent(args.dev + '.0')
-        dev1 = load_sent(args.dev + '.1')
+        dev0 = load_sent(args.dev + '.0', -1, args.sentence_flag)
+        dev1 = load_sent(args.dev + '.1', -1, args.sentence_flag)
     
     if args.predict:
         if args.model_path:
             # logger.info("Predicting a sample input\n---------------------\n")
             model = torch.load(args.model_path)
             model.training = False
-            output = utils.predict(model, args.predict, args.target_sentiment, args.beam)
-            # output = output.replace(" ","")
-            # output_new = ""      
-            # # output = re.sub(r"(\s\s+)", " ", output)
-            # for val in output:
-            #     if val == "  ":
-            #         output_new += " "
-            #     elif val == " ":
-            #         pass
-            #     else:
-            #         output_new += val
+            output = utils.predict(model, args.predict, args.target_sentiment, args.beam)            
             print(f"Input given: {args.predict} \nTarget sentiment: {args.target_sentiment} \nTranslated output: {output}")
             # logger.info(f"Input given: {args.predict} \nTarget sentiment: {args.target_sentiment} \nTranslated output: {output}")
     if args.test:
@@ -139,38 +114,16 @@ def run_model(args):
         out_file_1 = open(os.path.join(saves_path, "test_outputs_pos_to_neg"), "w")
         model = torch.load(args.model_path)
         model.training = False
-
-        test_neg = file0.readlines()
-        for line in test_neg:
+        
+        for line in file0:
             line = line.strip("\n")
             output = utils.predict(model, line, 1, args.beam)
             out_file_0.write(output+"\n")
-        
-        test_pos = file1.readlines()
-        for line in test_pos:
+                
+        for line in file1:
             line = line.strip("\n")
             output = utils.predict(model, line, 0, args.beam)
             out_file_1.write(output+"\n")
-
-        # test0 = load_sent(args.test + '.0')
-        # test1 = load_sent(args.test + '.1')
-        # if args.model_path:
-        #     saves_path = os.path.join(args.saves_path, utils.get_filename(args, time, "model"))
-        #     Path(saves_path).mkdir(parents=True, exist_ok=True)
-        #     model = torch.load(args.model_path)
-        #     model.training = False
-        #     batches0, batches1, _, _ = utils.get_batches(test0, test1, model.vocab.word2id, model.args.batch_size)
-
-        #     output_file_0 = open(os.path.join(saves_path, "test_outputs_neg_to_pos"), "w")
-        #     output_file_1 = open(os.path.join(saves_path, "test_outputs_pos_to_neg"), "w")
-
-        #     for batch0, batch1 in zip(batches0, batches1):
-        #         batch0 = batch0["enc_inputs"]
-        #         batch1 = batch1["enc_inputs"]
-        #         test_outputs_0 = utils.predict_batch(model, batch0, sentiment=1, beam_size=args.beam, plain_format=True)
-        #         test_outputs_1 = utils.predict_batch(model, batch1, sentiment=0, beam_size=args.beam, plain_format=True)
-        #         output_file_0.write('\n'.join(test_outputs_0) + '\n')
-        #         output_file_1.write('\n'.join(test_outputs_1) + '\n')
                 
     if args.train:
         summ_filename = 'runs/cross-alignment/'+utils.get_filename(args, time, "summary")

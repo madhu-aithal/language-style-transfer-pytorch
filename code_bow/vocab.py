@@ -3,7 +3,6 @@ from numpy import linalg as LA
 import pickle
 import random
 from collections import Counter
-import sentencepiece as spm
 
 class Vocabulary(object):
     def __init__(self, vocab_file, emb_file='', dim_emb=0):

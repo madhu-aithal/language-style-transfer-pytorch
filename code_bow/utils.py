@@ -113,6 +113,7 @@ def get_batches(x0, x1, word2id, batch_size, noisy=False):
         s = t
 
     return batches0, batches1, order0, order1
+    
 
 def get_batches_single(x, word2id, batch_size, noisy=False):  
     n = len(x)

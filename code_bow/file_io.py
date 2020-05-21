@@ -2,6 +2,7 @@ from nltk import word_tokenize, sent_tokenize
 import csv
 import gzip
 import spacy
+import random
 
 def load_doc(path):
     data = []
@@ -27,21 +28,34 @@ tokenizer = nlp.Defaults.create_tokenizer(nlp)
 
 #     return all_sents
 
-def load_sent(path, max_size=-1, sentence_flag=True):
+def process_sents(sent):   
+    sent = sent.strip("\n")
+    doc = nlp(sent)
+    processed_sent = ""
+    for token in doc:
+        processed_sent += token.text.lower() + " "
+    processed_sent = processed_sent.strip()
+    return processed_sent
+
+def load_sent(path, max_size, sentence_flag):
     data = []
     with open(path) as f:
-        for line in f:
+        reviews = f.read().splitlines()
+        # reviews = process_sents(reviews)
+        random.shuffle(reviews)
+        for line in reviews:
             line = line.strip("\n")
             if sentence_flag:
-                doc = nlp(line)        
+                doc = nlp(line)
                 for sent in doc.sents:                    
-                    data.append(sent.string)
+                    data.append(process_sents(sent.string))
                     if len(data) == max_size:
                         break
                 if len(data) == max_size:
                     break
             else:
-                data.append(line.split())
+                # print("sentence flag false")
+                data.append(process_sents(line))
                 if len(data) == max_size:
                     break
     print("data size: ", len(data))

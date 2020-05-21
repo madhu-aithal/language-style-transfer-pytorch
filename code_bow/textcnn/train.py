@@ -16,6 +16,7 @@ def train(train_iter, dev_iter, model, args):
     last_step = 0
     model.train()
     for epoch in range(1, args.epochs+1):
+        sys.stdout.write("\rEpoch: {}".format(epoch))
         for batch in train_iter:
             feature, target = batch.text, batch.label
             feature.t_(), target.sub_(1)  # batch first, index align
