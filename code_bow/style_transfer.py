@@ -15,7 +15,7 @@ import torch.nn as nn
 from torch import optim
 import torch.nn.functional as F
 from pathlib import Path
-import sentencepiece as spm
+# import sentencepiece as spm
 from model import Model
 from torch.utils.tensorboard import SummaryWriter
 import re

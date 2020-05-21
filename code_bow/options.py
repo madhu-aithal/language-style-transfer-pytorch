@@ -19,7 +19,7 @@ def load_arguments():
                 default=False)
         argparser.add_argument('--output',
                 type=str,
-                default='./tmp/sentiment.dev')
+                default='')
         argparser.add_argument('--vocab',
                 type=str,
                 default='')

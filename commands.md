@@ -11,12 +11,20 @@ nohup python code/style_transfer.py \
 
 * Training:
 ```
-nohup python code/style_transfer.py \
+nohup python code_bow/style_transfer.py \
 --saves_path ./model_saves/ \
 --train ./data/yelp/sentiment.train \
 --max_epochs 20 \
 --vocab ./tmp/yelp.vocab \
 --output ./tmp/sentiment.dev &> nohup2.out &
+```
+
+```
+nohup python code_bow/style_transfer.py \
+ --saves_path ./model_saves/ \
+ --train ./data/yelp/sentiment.train \
+ --max_epochs 20 \
+ --vocab ./tmp/yelp.vocab &> nohup_yelp_full_training.out &
 ```
 
 * Testng:
@@ -42,8 +50,8 @@ python code/style_transfer.py \
 
 python code/style_transfer.py \
 --predict "the service was great ." \
---model_path model_saves/model_0.0005_100_Apr-01-2020_22-10-19/100_epochs \
---vocab ./tmp/yelp.vocab
+--vocab ./tmp/yelp.vocab \
+--model_path model_saves/model_0.0005_100_Apr-01-2020_22-10-19/100_epochs 
 
 * TextCNN testing:
 ```

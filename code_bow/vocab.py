@@ -31,7 +31,11 @@ def build_vocab(data, path, min_occur=5):
     word2id = {'<pad>':0, '<go>':1, '<eos>':2, '<unk>':3}
     id2word = ['<pad>', '<go>', '<eos>', '<unk>']
 
-    words = [word for sent in data for word in sent]
+    words = []
+    for sent in data:
+        for word in sent.split():
+            words.append(word)
+    # words = [word for sent in data for word in sent]
     cnt = Counter(words)
     for word in cnt:
         if cnt[word] >= min_occur:
