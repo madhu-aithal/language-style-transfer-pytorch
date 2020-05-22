@@ -31,8 +31,9 @@ nohup python code_bow/style_transfer.py \
 ```
 nohup python code/style_transfer.py \
 --test data/yelp/sentiment.test \
+--vocab ./tmp/yelp.vocab
 --model_path model_saves/model_0.0005_20_Mar-29-2020_09-13-10/20_epochs \
---vocab ./tmp/yelp.vocab &> nohup2.out &
+&> nohup2.out &
 ```
 
 ```
@@ -47,6 +48,8 @@ python code/style_transfer.py \
 --model_path model_saves/model_0.0005_100_Apr-01-2020_22-10-19/100_epochs \
 --vocab ./tmp/twitter.vocab 
 ```
+
+* Predicting
 
 python code/style_transfer.py \
 --predict "the service was great ." \
