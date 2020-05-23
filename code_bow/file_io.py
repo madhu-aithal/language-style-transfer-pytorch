@@ -1,7 +1,7 @@
 from nltk import word_tokenize, sent_tokenize
 import csv
 import gzip
-import spacy
+# import spacy
 import random
 
 def load_doc(path):
@@ -14,8 +14,8 @@ def load_doc(path):
     return data
 
 
-nlp = spacy.load("en_core_web_md")
-tokenizer = nlp.Defaults.create_tokenizer(nlp)
+# nlp = spacy.load("en_core_web_md")
+# tokenizer = nlp.Defaults.create_tokenizer(nlp)
 
 # def get_sents(reviews, min_no_of_tokens: int = 5):
 #     all_sents = []    
