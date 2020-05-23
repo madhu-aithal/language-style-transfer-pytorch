@@ -94,8 +94,8 @@ class Model(nn.Module):
         encoder_hidden = self.encoder.initHidden(device=self.device)
         encoder_hidden = encoder_hidden.repeat(1,batch_size,1)
         input_tensor = self.encoder.embedding(input_data)
-        # input_tensor = self.dropout(input_tensor)
-        input_tensor = nn.Dropout(0.2)(input_tensor)
+        input_tensor = self.dropout(input_tensor)
+        # input_tensor = nn.Dropout(0.2)(input_tensor)
 
         if torch.cuda.is_available():
             input_tensor = input_tensor.to(device=self.device)
