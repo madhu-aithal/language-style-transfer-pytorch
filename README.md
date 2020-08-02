@@ -17,22 +17,22 @@ Below are sample commands to train and test Style transfer and TextCNN models. R
 python code_bow/style_transfer.py --saves_path <saves_dir> --train "data/tweets/tweets.train" --max_epochs 20 --vocab ./tmp/twitter.vocab
 ```
 
-1. Training
+1. **Training**
     ```
     python code_bow/style_transfer.py --saves_path <saves_dir> --train <train_files_path> --max_epochs 20 --vocab ./tmp/twitter.vocab
     ```
 
-2. Prediction
+2. **Prediction**
     ```
     python code_bow/style_transfer.py --predict "the service was great ." --vocab ./tmp/twitter.vocab --model_path <saved_model_path>
     ```
 
-3. Testing
+3. **Testing**
     ```
     python code_bow/style_transfer.py --test <tweets_test_data_files_path> --model_path <saved_model_path> --vocab ./tmp/twitter.vocab 
     ```
 
-4. Testing the model outputs with a TextCNN model
+4. **Testing the model outputs with a TextCNN model**
     ```
     python textcnn/main.py -test=<test_outputs_file_path> -snapshot=<saved_textcnn_model_dir>
     ```
