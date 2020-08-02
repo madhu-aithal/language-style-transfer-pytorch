@@ -34,10 +34,14 @@ def load_arguments():
                 default='')
         argparser.add_argument('--target_sentiment',
                 type=int,
-                default=0)        
+                default=0)      
+        argparser.add_argument('--seed',
+                type=int,
+                default=0)     
         argparser.add_argument('--saves_path',
                 type=str,
-                default='./model_saves')
+                # default='./model_saves')
+                default='/data/madhu/models/style_transfer_shen_et_al/model_saves/')                
         argparser.add_argument('--predict',
                 type=str,
                 default='')
@@ -77,7 +81,6 @@ def load_arguments():
         argparser.add_argument('--max_train_size',
                 type=int,
                 default=-1)
-
         argparser.add_argument('--beam',
                 type=int,
                 default=1)

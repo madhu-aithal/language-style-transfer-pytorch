@@ -70,13 +70,13 @@ def run_model(args):
     #####   data preparation   #####
     if args.train:
         
-        logger = utils.init_logging(args, time)
+        logger, saves_dir = utils.init_logging(args, time)
         
         print("args: ", args)
         logger.info("args: "+str(args))
         no_of_epochs = args.max_epochs
-        train0 = load_sent(args.train + '.0', args.max_train_size, args.sentence_flag)
-        train1 = load_sent(args.train + '.1', args.max_train_size, args.sentence_flag)
+        train0 = load_sent(args.train + '.0', args.max_train_size, args.max_seq_length, args.sentence_flag)
+        train1 = load_sent(args.train + '.1', args.max_train_size, args.max_seq_length, args.sentence_flag)
         
         print('#sents of training file 0:', len(train0))
         print('#sents of training file 1:', len(train1))
@@ -94,25 +94,31 @@ def run_model(args):
     dev1 = []
     
     if args.dev:
-        dev0 = load_sent(args.dev + '.0', -1, args.sentence_flag)
-        dev1 = load_sent(args.dev + '.1', -1, args.sentence_flag)
+        dev0 = load_sent(args.dev + '.0', -1, args.max_seq_length, args.sentence_flag)
+        dev1 = load_sent(args.dev + '.1', -1, args.max_seq_length,  args.sentence_flag)
     
     if args.predict:
         if args.model_path:
             # logger.info("Predicting a sample input\n---------------------\n")
-            model = torch.load(args.model_path)
+            device = torch.device("cuda:"+str(args.cuda_device) if torch.cuda.is_available() else "cpu")
+            model = torch.load(args.model_path, map_location=device)
             model.training = False
-            output = utils.predict(model, args.predict, args.target_sentiment, args.beam)            
+            output = utils.predict(model, args.predict, args.target_sentiment, args.beam)
             print(f"Input given: {args.predict} \nTarget sentiment: {args.target_sentiment} \nTranslated output: {output}")
             # logger.info(f"Input given: {args.predict} \nTarget sentiment: {args.target_sentiment} \nTranslated output: {output}")
     if args.test:
+        logger, saves_dir = utils.init_logging(args, time)
+        
+        print("args: ", args)
+        logger.info("args: "+str(args))
+        device = torch.device("cuda:"+str(args.cuda_device) if torch.cuda.is_available() else "cpu")
         file0 = open(args.test+".0", "r")
         file1 = open(args.test+".1", "r")
-        saves_path = os.path.join(args.saves_path, utils.get_filename(args, time, "model"))
+        saves_path = os.path.join(args.saves_path, utils.get_filename(args, time, ""))
         Path(saves_path).mkdir(parents=True, exist_ok=True)
         out_file_0 = open(os.path.join(saves_path, "test_outputs_neg_to_pos"), "w")
         out_file_1 = open(os.path.join(saves_path, "test_outputs_pos_to_neg"), "w")
-        model = torch.load(args.model_path)
+        model = torch.load(args.model_path, map_location=device)
         model.training = False
         
         for line in file0:
@@ -130,7 +136,7 @@ def run_model(args):
         writer = SummaryWriter(summ_filename)
 
         model = get_model(args, vocab, logger)
-        model.train_max_epochs(args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, time,
+        model.train_max_epochs(saves_dir, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, time,
             save_epochs_flag=True)
         
 if __name__ == '__main__':

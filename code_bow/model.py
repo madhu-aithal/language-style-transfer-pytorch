@@ -24,8 +24,8 @@ from discriminator import Discriminator
 from pathlib import Path
 import math
 
-DISCRIMINATOR_PATH = "model_saves/model_0.0005_30_09:50_03-16-2020_discrminator_drop_0.2/1_epochs"
-AUTOENCODER_PATH = "model_saves/model_0.0005_1_10:42_03-18-2020_autoencoder_dropout_0.2/1_epochs"
+# DISCRIMINATOR_PATH = "model_saves/model_0.0005_30_09:50_03-16-2020_discrminator_drop_0.2/1_epochs"
+# AUTOENCODER_PATH = "model_saves/model_0.0005_1_10:42_03-18-2020_autoencoder_dropout_0.2/1_epochs"
 
 class Model(nn.Module):
 
@@ -47,18 +47,26 @@ class Model(nn.Module):
 
         # Loading the components of the pretrained model and assigning it to the current model
         if self.args.load_model == True:
-            autoencoder_model = torch.load(AUTOENCODER_PATH)
-            discriminator_model = torch.load(DISCRIMINATOR_PATH)
+            autoencoder_model = torch.load(self.args.autoencoder_path, map_location=self.device)
+            print("AE loaded")
+            discriminator_model = torch.load(self.args.discriminator_path, map_location=self.device)
+            print("Disc. loaded")
             self.generator = autoencoder_model.generator.to(self.device)
             self.encoder = autoencoder_model.encoder.to(self.device)
+            
+            print("Deleted pretrained model parts ")
             self.discriminator1 = discriminator_model.discriminator1.to(self.device)
             self.discriminator2 = discriminator_model.discriminator2.to(self.device)
+
+            del autoencoder_model            
+            del discriminator_model   
         else:
             self.generator = Generator(self.embedding_size_enc, self.hidden_size_gen, self.output_size_gen, self.dropout_p).to(self.device)
             self.encoder = Encoder(self.input_size_enc, self.embedding_size_enc, self.hidden_size_enc, self.dropout_p).to(self.device)
             self.discriminator1 = Discriminator(args, self.device, self.hidden_size_gen, 1, self.dropout_p).to(self.device)
             self.discriminator2 = Discriminator(args, self.device, self.hidden_size_gen, 1, self.dropout_p).to(self.device)
 
+        print("Init done")
         self.softmax = torch.nn.Softmax(dim=1)
         self.EOS_token = 2
         self.GO_token = 1
@@ -343,8 +351,13 @@ class Model(nn.Module):
 
         return loss_adv1, loss_adv2, loss_enc_gen, loss_reconstruction, correct_count
 
-    def train_max_epochs(self, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, time, save_epochs_flag=False, 
+    def train_max_epochs(self, saves_dir, args, train0, train1, dev0, dev1, vocab, no_of_epochs, writer, time, save_epochs_flag=False, 
         save_batch_flag=False, save_batch=5):
+        seed_val = args.seed
+        random.seed(seed_val)
+        np.random.seed(seed_val)
+        torch.manual_seed(seed_val)
+        torch.cuda.manual_seed_all(seed_val)
         print("No of epochs: ", no_of_epochs)
         self.train()
         enc_optim = optim.AdamW(self.encoder.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
@@ -353,7 +366,8 @@ class Model(nn.Module):
         discrim2_optim = optim.AdamW(self.discriminator2.parameters(), lr=args.learning_rate, betas=(self.beta1, self.beta2))
         
         Path(args.saves_path).mkdir(parents=True, exist_ok=True)        
-        saves_path = os.path.join(args.saves_path, utils.get_filename(args, time, "model"))
+        saves_path = saves_dir
+        # saves_path = os.path.join(args.saves_path, utils.get_filename(args, time, ""))
         Path(saves_path).mkdir(parents=True, exist_ok=True)
         flag = True
         with autograd.detect_anomaly():
@@ -384,7 +398,7 @@ class Model(nn.Module):
                 disc_tot_accuracy = 0
                 batch_count = 0
                 for batch0, batch1 in zip(batches0, batches1):
-                    # print(batch_count, len(batch0["enc_inputs"]), len(batch0["enc_inputs"][0]))
+                    print(batch_count, len(batch0["enc_inputs"]), len(batch0["enc_inputs"][0]))
                     batch_count += 1
                     enc_optim.zero_grad()
                     gen_optim.zero_grad()
@@ -416,15 +430,15 @@ class Model(nn.Module):
                     else:                        
                         if flag == True:
                             loss_enc_gen.backward()
-                            torch.nn.utils.clip_grad_value_(self.encoder.parameters(), self.grad_clip)
-                            torch.nn.utils.clip_grad_value_(self.generator.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_norm_(self.encoder.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_norm_(self.generator.parameters(), self.grad_clip)
                             enc_optim.step()
                             gen_optim.step()
                         else:
                             loss_adv1.backward(retain_graph=True)
                             loss_adv2.backward()
-                            torch.nn.utils.clip_grad_value_(self.discriminator1.parameters(), self.grad_clip)
-                            torch.nn.utils.clip_grad_value_(self.discriminator2.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_norm_(self.discriminator1.parameters(), self.grad_clip)
+                            torch.nn.utils.clip_grad_norm_(self.discriminator2.parameters(), self.grad_clip)
                             discrim1_optim.step()
                             discrim2_optim.step()
                         flag = not flag

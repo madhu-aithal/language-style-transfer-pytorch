@@ -61,7 +61,7 @@ def get_batch(x, y, word2id, noisy=False, min_len=5):
     max_len = max([len(sent) for sent in x])
     max_len = max(max_len, min_len)
     for sent in x:
-        sent = sent.split()
+        # sent = sent.split()
         sent_id = [word2id[w] if w in word2id else unk for w in sent]
         l = len(sent)
         padding = [pad] * (max_len - l)
@@ -134,7 +134,7 @@ def get_batches_single(x, word2id, batch_size, noisy=False):
 
 def get_filename(args, time: int, util_name=""):   
     time = datetime.fromtimestamp(int(time))
-    filename = str(time.strftime(str(args.learning_rate)+"_"+str(args.max_epochs)+'_%b-%d-%Y_%H-%M-%S'))
+    filename = str(time.strftime("trainset-"+str(args.max_train_size)+"_pretrain-"+str(args.pretrain_flag)+"_ae_flag-"+str(args.autoencoder_pretrain_flag)+"_batch-"+str(args.batch_size)+"_LR-"+str(args.learning_rate)+'_%b-%d-%Y_%H-%M-%S'))
     if util_name != "":
         filename = util_name+"_"+filename
     return filename
@@ -142,7 +142,7 @@ def get_filename(args, time: int, util_name=""):
 def init_logging(args, time: int, modelname='cross-alignment'):    
     # Path(args.log_dir).mkdir(parents=True, exist_ok=True)
     Path(args.saves_path).mkdir(parents=True, exist_ok=True)
-    save_log_path = os.path.join(args.saves_path, get_filename(args, time, "model"))
+    save_log_path = os.path.join(args.saves_path, get_filename(args, time))
     Path(save_log_path).mkdir(parents=True, exist_ok=True)
     filename = get_filename(args, time)
     filename = str(datetime.now().strftime(filename+".log"))
@@ -150,7 +150,7 @@ def init_logging(args, time: int, modelname='cross-alignment'):
     logging.basicConfig(filename=path, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
     logger=logging.getLogger() 
     logger.setLevel(logging.DEBUG)
-    return logger 
+    return logger, save_log_path
 
 
 def predict(model, sample_input, sentiment, beam_size=1, plain_format=True):

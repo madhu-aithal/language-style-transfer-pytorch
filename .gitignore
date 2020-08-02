@@ -3,7 +3,7 @@ model_saves/
 runs/
 saves/
 models/
-data/
+predict.sh
 
 *.pt
 __pycache__/

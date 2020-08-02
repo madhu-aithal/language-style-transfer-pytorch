@@ -37,7 +37,7 @@ def process_sents(sent):
     processed_sent = processed_sent.strip()
     return processed_sent
 
-def load_sent(path, max_size, sentence_flag):
+def load_sent(path, max_size, max_seq_length, sentence_flag):
     data = []
     with open(path) as f:
         reviews = f.read().splitlines()
@@ -45,19 +45,25 @@ def load_sent(path, max_size, sentence_flag):
         random.shuffle(reviews)
         for line in reviews:
             line = line.strip("\n")
+                    
             if sentence_flag:
                 doc = nlp(line)
-                for sent in doc.sents:                    
-                    data.append(process_sents(sent.string))
-                    if len(data) == max_size:
-                        break
+                token_count = len(doc)
+                if token_count <= max_seq_length:                    
+                    for sent in doc.sents:                    
+                        data.append(process_sents(sent.string).split())
+                        if len(data) == max_size:
+                            break
                 if len(data) == max_size:
                     break
             else:
-                # print("sentence flag false")
-                data.append(process_sents(line))
-                if len(data) == max_size:
-                    break
+                token_count = len(line.split())
+                if token_count <= max_seq_length:                
+                    # data.append(process_sents(line))
+                    data.append(line.lower().split())
+                    if len(data) == max_size:
+                        break
+
     print("data size: ", len(data))
     return data
 
