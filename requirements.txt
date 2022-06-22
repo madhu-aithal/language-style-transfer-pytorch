@@ -12,7 +12,7 @@ lazy-object-proxy==1.4.3
 Markdown==3.2.1
 mccabe==0.6.1
 nltk==3.4.5
-numpy==1.18.1
+numpy==1.22.0
 oauthlib==3.1.0
 protobuf==3.11.3
 pyasn1==0.4.8
